@@ -1,10 +1,11 @@
 package edu.pnu.stem.indoor.util;
 
 import com.vividsolutions.jts.geom.*;
-import edu.pnu.stem.indoor.CellSpace;
-import edu.pnu.stem.indoor.VisibilityGraph;
+import edu.pnu.stem.indoor.feature.CellSpace;
+import edu.pnu.stem.indoor.feature.VisibilityGraph;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 
 /**
  * Created by STEM_KTH on 2017-06-09.
@@ -12,6 +13,7 @@ import java.util.ArrayList;
  */
 public class IndoorUtils {
     private static final GeometryFactory gf = new GeometryFactory();
+    private static final int BUFFER_SIZE = 10;
 
     /**
      * This function provides an indoor route that consider the indoor space geometry for a given trajectory.
@@ -95,21 +97,55 @@ public class IndoorUtils {
             */
             if(startPCellIndex != endPCellIndex) {
                 // Makes door2door graph
-                for (CellSpace cellSpace: cellSpaces) {
-                    ArrayList<LineString> d2dGraph = cellSpace.getDoor2doorEdges();
-                    if(d2dGraph.size() != 0) {
-                        graph.addEdges(d2dGraph);
+                if(VisibilityGraph.getBaseGraph() == null) {
+                    ArrayList<LineString> doors = new ArrayList<>();
+                    for (CellSpace cellSpace: cellSpaces) {
+                        ArrayList<LineString> d2dGraph = cellSpace.getDoor2doorEdges();
+                        if(d2dGraph.size() != 0) {
+                            graph.addEdges(d2dGraph);
+                        }
+                        for(LineString door: cellSpace.getDoors()) {
+                            doors.add(door);
+                        }
                     }
+                    // Determine whether the indoor model is thin or thick by door objects
+                    // If it is a thick model, creates edges for the door2door graph by finding separated two objects but actually same object (door).
+                    HashSet<LineString> interDoorGraph = new HashSet<>();
+                    for(int i = 0; i < doors.size(); i++) {
+                        for(int j = i + 1; j <  doors.size(); j++) {
+                            LineString doorA = doors.get(i);
+                            LineString doorB = doors.get(j);
+                            if(doorA.equals(doorB)) {
+                                break; // In case: thin model
+                            }
+                            else {
+                                if(doorA.buffer(BUFFER_SIZE,2).covers(doorB)) { // In case: thick model
+                                    interDoorGraph.add(gf.createLineString(new Coordinate[]{doorA.getStartPoint().getCoordinate(), doorB.getStartPoint().getCoordinate()}));
+                                    interDoorGraph.add(gf.createLineString(new Coordinate[]{doorA.getEndPoint().getCoordinate(), doorB.getEndPoint().getCoordinate()}));
+                                }
+                            }
+                        }
+                    }
+                    doors.clear();
+                    for(LineString door: interDoorGraph) {
+                        doors.add(door);
+                    }
+                    graph.addEdges(doors);
+
+                    VisibilityGraph.setBaseGraph(graph.getEdges());
+                }
+                else {
+                    // Reuse VisibilityGraph object using base graph
+                    graph = VisibilityGraph.getBaseGraph();
                 }
                 // Make point2door edges and reflects it to door2door graph
                 ArrayList<LineString> start2doorGraph =  makePoint2DoorEdge(startP, cellSpaces.get(startPCellIndex));
                 ArrayList<LineString> end2doorGraph =  makePoint2DoorEdge(endP, cellSpaces.get(endPCellIndex));
                 graph.addEdges(start2doorGraph);
                 graph.addEdges(end2doorGraph);
-
                 // Get point2point shortest path using door2door graph
                 Coordinate[] coords = new Coordinate[]{startP.getCoordinate(), endP.getCoordinate()};
-                resultIndoorPath = (LineString) graph.getShortestRoute(coords);
+                resultIndoorPath = graph.getShortestRoute(coords);
             }
         }
 
@@ -151,7 +187,7 @@ public class IndoorUtils {
      * @return Indoor route between start point and end point
      * */
     private static LineString makeIndoorRouteInCell(Point startP, Point endP, CellSpace cellSpace) {
-        LineString p2pIndoorPath = null;
+        LineString p2pIndoorPath;
         VisibilityGraph graph = new VisibilityGraph();
 
         Coordinate[] coords = new Coordinate[]{startP.getCoordinate(), endP.getCoordinate()};
@@ -248,10 +284,10 @@ public class IndoorUtils {
 
         pathCoordinates.add(trajectory.getCoordinates()[0]);
         for(int i = 0; i < trajectory.getNumPoints() - 1; i++) {
-            Coordinate startP = null;
+            Coordinate startP;
             Coordinate endP = trajectory.getCoordinateN(i + 1);
-            Coordinate[] trajectoryCoordinates = null;
-            LineString trajectorySegment = null;
+            Coordinate[] trajectoryCoordinates;
+            LineString trajectorySegment;
 
             if(correctedCoordinate == null) {
                 startP = trajectory.getCoordinateN(i);
@@ -307,7 +343,9 @@ public class IndoorUtils {
     }
 
     /**
-     *
+     * 이 함수는 입력된 궤적에 노이즈를 더해주는 함수이다.
+     *  @param trajectory 입력 궤적
+     *  @param noiseRange 노이즈 범위
      * */
     public static LineString generatePathAddedNoise(LineString trajectory, final double noiseRange) {
         LineString resultPath = null;
@@ -320,8 +358,6 @@ public class IndoorUtils {
             lineSegment.setCoordinates(coordinates[i], coordinates[i + 1]);
             lineSegments.add(lineSegment);
         }
-
-
 
         return resultPath;
     }

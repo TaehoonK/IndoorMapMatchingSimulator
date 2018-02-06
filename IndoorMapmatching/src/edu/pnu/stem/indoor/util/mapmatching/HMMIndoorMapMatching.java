@@ -5,7 +5,7 @@ import com.vividsolutions.jts.geom.Geometry;
 import com.vividsolutions.jts.geom.LineString;
 import com.vividsolutions.jts.geom.Polygon;
 import com.vividsolutions.jts.util.GeometricShapeFactory;
-import edu.pnu.stem.indoor.IndoorFeatures;
+import edu.pnu.stem.indoor.feature.IndoorFeatures;
 import edu.pnu.stem.indoor.util.mapmatching.etc.HiddenMarkovModel;
 import edu.pnu.stem.indoor.util.IndoorUtils;
 
@@ -65,7 +65,7 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
             for(int j = 0; j < topologyGraph.length; j++) {
                 if(topologyGraph[i][j]) {
                     if(i == j) matrixA[i][j] = staticProbability;
-                    else if(i != j) matrixA[i][j] = (1 - staticProbability) / doorCount;
+                    else matrixA[i][j] = (1 - staticProbability) / doorCount;
                 }
             }
         }
@@ -174,12 +174,12 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
         }
 
         double maxProbability = 0;
-        for(int i = 0; i < candidateSet.size(); i++) {
-            observations[observations.length - 1] = candidateSet.get(i);
+        for (Integer candidateCell_Index : candidateSet) {
+            observations[observations.length - 1] = candidateCell_Index;
             double temporalProbability = hmm.evaluate(observations);
-            if(temporalProbability > maxProbability) {
+            if (temporalProbability > maxProbability) {
                 maxProbability = temporalProbability;
-                selectedResult = candidateSet.get(i);
+                selectedResult = candidateCell_Index;
             }
         }
 

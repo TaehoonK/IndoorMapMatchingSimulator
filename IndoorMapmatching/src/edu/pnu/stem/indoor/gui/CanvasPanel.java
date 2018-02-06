@@ -3,12 +3,14 @@ package edu.pnu.stem.indoor.gui;
 import com.vividsolutions.jts.geom.*;
 import com.vividsolutions.jts.geom.Point;
 import com.vividsolutions.jts.geom.Polygon;
-import edu.pnu.stem.indoor.CellSpace;
-import edu.pnu.stem.indoor.IndoorFeatures;
+import com.vividsolutions.jts.operation.buffer.BufferOp;
+import edu.pnu.stem.indoor.feature.CellSpace;
+import edu.pnu.stem.indoor.feature.IndoorFeatures;
 import edu.pnu.stem.indoor.util.IndoorUtils;
+import edu.pnu.stem.indoor.util.SyntheticTrajectoryGenerator;
+import edu.pnu.stem.indoor.util.TimeTableElement;
 import edu.pnu.stem.indoor.util.mapmatching.DirectIndoorMapMatching;
 import edu.pnu.stem.indoor.util.mapmatching.HMMIndoorMapMatching;
-import ucar.ma2.Array;
 
 import javax.swing.*;
 import java.awt.*;
@@ -16,6 +18,7 @@ import java.awt.event.*;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
 import java.util.ArrayList;
+import java.util.Random;
 
 /**
  * Created by STEM_KTH on 2017-05-17.
@@ -27,7 +30,7 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
     private static final double SCREENBUFFER = 50; //SCREENBUFFER value
     private static final int ARR_SIZE = 8;
 
-    public EditStatus currentEditStatus = null;
+    EditStatus currentEditStatus = null;
 
     private int selectedCellIndex = -1;
 
@@ -36,24 +39,24 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
     private LineString trajectory = null;
     private Coordinate[] drawingCellCoords = null;
     private Coordinate trajectoryCoords = null;
-    private ArrayList<LineString> relatedVisibilityEdege = null;
-    private ArrayList<LineString> relatedD2DEdege = null;
+    private ArrayList<LineString> relatedVisibilityEdge = null;
+    private ArrayList<LineString> relatedD2DEdge = null;
 
     int mousePositionX;
     int mousePositionY;
 
-    public CanvasPanel() {
+    CanvasPanel() {
         gf = new GeometryFactory();
         indoorFeatures = new IndoorFeatures(gf);
-        relatedVisibilityEdege = new ArrayList<>();
-        relatedD2DEdege = new ArrayList<>();
+        relatedVisibilityEdge = new ArrayList<>();
+        relatedD2DEdge = new ArrayList<>();
         this.addMouseListener(this);
         this.addMouseMotionListener(this);
         this.addMouseWheelListener(this);
         this.addKeyListener(this);
     }
 
-    public void addCellSpace(CellSpace cellSpace) {
+    void addCellSpace(CellSpace cellSpace) {
         indoorFeatures.addCellSpace(cellSpace);
         repaint();
     }
@@ -63,12 +66,12 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
     }
 
 
-    public void setTrajectory(LineString loadedTrajectory) {
+    void setTrajectory(LineString loadedTrajectory) {
         this.trajectory = loadedTrajectory;
         repaint();
     }
 
-    public void evaluateDirectIndoorMapMatching() {
+    void evaluateDirectIndoorMapMatching() {
         if(indoorFeatures != null && trajectory != null) {
             DirectIndoorMapMatching dimm = new DirectIndoorMapMatching(indoorFeatures);
             HMMIndoorMapMatching himm = new HMMIndoorMapMatching(indoorFeatures);
@@ -137,6 +140,7 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
                 ArrayList<LineString> doors = cellSpace.getDoors();
                 for (LineString lineString: doors) {
                     drawLines(g2, lineString.getCoordinates(), Color.YELLOW, false);
+                    drawLines(g2, lineString.buffer(10,2).getCoordinates(), Color.RED, false);
                 }
 
                 /*
@@ -156,10 +160,10 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
                 }
                 */
                 if(currentEditStatus == EditStatus.GET_RELATED_EDGE) {
-                    for (LineString lineString: relatedVisibilityEdege) {
+                    for (LineString lineString: relatedVisibilityEdge) {
                         drawLines(g2, lineString.getCoordinates(), Color.GREEN, false);
                     }
-                    for (LineString lineString: relatedD2DEdege) {
+                    for (LineString lineString: relatedD2DEdge) {
                         drawLines(g2, lineString.getCoordinates(), Color.CYAN, false);
                     }
                 }
@@ -169,6 +173,7 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
             drawArrowLines(g2, trajectory.getCoordinates(), Color.GREEN);
             System.out.println("original trajectory N : " + trajectory.getNumPoints());
             // TODO : Remove it(Temporary case)
+            /*
             double MAX_DISTANCE = 40;
             if(trajectory.getLength() > MAX_DISTANCE) {
                 LineString lineWithMaxIndoorDistance = null;
@@ -180,6 +185,7 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
                 drawArrowLines(g2, lineWithMaxIndoorDistance.getCoordinates(), Color.RED);
                 System.out.println("corrected trajectory N : " + lineWithMaxIndoorDistance.getNumPoints());
             }
+            */
         }
         if(drawingCellCoords != null) {
             if(drawingCellCoords.length == 1) {
@@ -359,8 +365,8 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
                 selectedCellIndex = indoorFeatures.getCellSpaceIndex(new Coordinate(previousMouseX, previousMouseY))[0];
             }
             else if(currentEditStatus == EditStatus.GET_RELATED_EDGE) {
-                relatedVisibilityEdege.clear();
-                relatedD2DEdege.clear();
+                relatedVisibilityEdge.clear();
+                relatedD2DEdge.clear();
                 // find closest point
                 Point targetPoint = null;
                 for (CellSpace cellSpace : indoorFeatures.getCellSpaces()) {
@@ -379,12 +385,12 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
                     for (CellSpace cellSpace : indoorFeatures.getCellSpaces()) {
                         for(LineString lineString : cellSpace.getVisibilityEdges()){
                             if(lineString.getStartPoint().equals(targetPoint)) {
-                                relatedVisibilityEdege.add(lineString);
+                                relatedVisibilityEdge.add(lineString);
                             }
                         }
                         for(LineString lineString : cellSpace.getDoor2doorEdges()){
                             if(lineString.getStartPoint().equals(targetPoint)) {
-                                relatedD2DEdege.add(lineString);
+                                relatedD2DEdge.add(lineString);
                             }
                         }
                     }
@@ -436,5 +442,25 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
     @Override
     public void mouseWheelMoved(MouseWheelEvent e) {
 
+    }
+
+    void syntheticTrajectoryTest() {
+        ArrayList<TimeTableElement> timeTableElements = new ArrayList<>();
+        Random random = new Random();
+        int timeTableElementsNum = 10;
+        int travelTimeUpperBound = 30;
+        int travelTimeLowerBound = 5;
+        int cellSpacesCount = indoorFeatures.getCellSpaces().size();
+
+        for (int i = 0; i < timeTableElementsNum; i++) {
+            int startCellIndex = random.nextInt(cellSpacesCount);
+            int endCellIndex = random.nextInt(cellSpacesCount);
+            int travelTime = random.nextInt(travelTimeUpperBound- travelTimeLowerBound) + travelTimeLowerBound;
+            timeTableElements.add(new TimeTableElement(startCellIndex, endCellIndex, travelTime));
+        }
+
+        SyntheticTrajectoryGenerator generator = new SyntheticTrajectoryGenerator(indoorFeatures);
+        trajectory = generator.generate(timeTableElements);
+        repaint();
     }
 }

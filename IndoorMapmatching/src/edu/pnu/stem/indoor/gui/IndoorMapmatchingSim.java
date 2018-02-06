@@ -1,7 +1,13 @@
 package edu.pnu.stem.indoor.gui;
 
+import cn.edu.zju.db.datagen.database.DB_Connection;
+import cn.edu.zju.db.datagen.database.DB_WrapperLoad;
+import cn.edu.zju.db.datagen.database.spatialobject.AccessPoint;
+import cn.edu.zju.db.datagen.database.spatialobject.Floor;
+import cn.edu.zju.db.datagen.database.spatialobject.Partition;
 import com.vividsolutions.jts.geom.*;
-import edu.pnu.stem.indoor.CellSpace;
+import diva.util.java2d.Polygon2D;
+import edu.pnu.stem.indoor.feature.CellSpace;
 import edu.pnu.stem.indoor.util.ChangeCoord;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -14,7 +20,11 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
+import java.awt.geom.Line2D;
+import java.awt.geom.Rectangle2D;
 import java.io.*;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -41,14 +51,13 @@ public class IndoorMapmatchingSim {
     private JButton buttonGetOSMData;
     private JButton buttonGetCreateTrajectory;
     private JButton buttonDirectMapMatching;
+    private JButton buttonGetIFCData;
 
-    private ChangeCoord changeCoord = null;
-
-    public IndoorMapmatchingSim() {
+    private IndoorMapmatchingSim() {
         panelMain.setSize(1000,1000);
 
         buttonGetPreparedInfo.addActionListener(e -> {
-            JFileChooser fileChooser = new JFileChooser("D:\\InteliJ\\github\\IndoorMapmatching");
+            JFileChooser fileChooser = new JFileChooser("C:\\Users\\timeo\\IdeaProjects\\github\\IndoorMapmatching");
             FileNameExtensionFilter filter = new FileNameExtensionFilter("txt (*.txt)", "txt");
             fileChooser.setFileFilter(filter);
 
@@ -57,16 +66,14 @@ public class IndoorMapmatchingSim {
                 File file = fileChooser.getSelectedFile();
                 try {
                     getIndoorInfoWithSimpleFormat(file);
-                } catch (FileNotFoundException e1) {
-                    e1.printStackTrace();
                 } catch (IOException e1) {
                     e1.printStackTrace();
                 }
             }
         });
         buttonGetOSMData.addActionListener(e -> {
-            JFileChooser fileChooser = new JFileChooser("D:\\InteliJ\\github\\IndoorMapmatching");
-            FileNameExtensionFilter filter = new FileNameExtensionFilter("osm (*.osm)", "osm");
+            JFileChooser fileChooser = new JFileChooser("C:\\Users\\timeo\\IdeaProjects\\github\\IndoorMapmatching");
+            FileNameExtensionFilter filter = new FileNameExtensionFilter("OSM Data (*.osm)", "osm");
             fileChooser.setFileFilter(filter);
 
             int returnVal = fileChooser.showOpenDialog(panelMain);
@@ -74,23 +81,26 @@ public class IndoorMapmatchingSim {
                 File file = fileChooser.getSelectedFile();
                 try {
                     getIndoorInfoWithOSMFormat(file);
-                } catch (FileNotFoundException e1) {
-                    e1.printStackTrace();
-                } catch (IOException e1) {
-                    e1.printStackTrace();
-                } catch (ParserConfigurationException e1) {
-                    e1.printStackTrace();
-                } catch (SAXException e1) {
+                } catch (IOException | ParserConfigurationException | SAXException e1) {
                     e1.printStackTrace();
                 }
+            }
+        });
+        buttonGetIFCData.addActionListener(e -> {
+            JFileChooser fileChooser = new JFileChooser("C:\\Users\\timeo\\IdeaProjects\\github\\IndoorMapmatching");
+            FileNameExtensionFilter filter = new FileNameExtensionFilter("IFC Data (*.ifc)", "ifc");
+            fileChooser.setFileFilter(filter);
+
+            int returnVal = fileChooser.showOpenDialog(panelMain);
+            if (returnVal == JFileChooser.APPROVE_OPTION) {
+                File file = fileChooser.getSelectedFile();
+                getIndoorInfoWithIFCFormat(file);
             }
         });
         buttonCreateCell.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.CREATE_CELLSPACE);
         buttonCreatePath.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.CREATE_TRAJECTORY);
         buttonSelectCell.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.SELECT_CELLSPACE);
-        buttonPathEvaluate.addActionListener(e -> {
-
-        });
+        buttonPathEvaluate.addActionListener(e -> ((CanvasPanel)panelCanvas).syntheticTrajectoryTest());
         buttonCreateHole.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.CREATE_HOLE);
         buttonGetRelatedEdge.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.GET_RELATED_EDGE);
         buttonGetCreateTrajectory.addActionListener(e -> {
@@ -103,8 +113,6 @@ public class IndoorMapmatchingSim {
                 File file = fileChooser.getSelectedFile();
                 try {
                     getBuildNGoData(file);
-                } catch (FileNotFoundException e1) {
-                    e1.printStackTrace();
                 } catch (IOException e1) {
                     e1.printStackTrace();
                 }
@@ -114,22 +122,16 @@ public class IndoorMapmatchingSim {
     }
 
     private void getBuildNGoData(File inputFile) throws IOException {
-        String line = null;
-        int depth = 0;
+        String line;
         GeometryFactory gf = new GeometryFactory();
-        ArrayList<Coordinate> coords = new ArrayList<Coordinate>();
-
-        if(changeCoord == null) {
-            // TODO : Throw exception
-
-        }
+        ArrayList<Coordinate> coords = new ArrayList<>();
 
         BufferedReader reader = new BufferedReader(new FileReader(inputFile));
         while((line = reader.readLine()) != null) {
             if(line.split("/").length > 1) {
                 Coordinate coord = new Coordinate(Double.valueOf(line.split("/")[1]),
                         Double.valueOf(line.split("/")[0]));
-                coords.add(new Coordinate(changeCoord.changeCordinate(coord)));
+                coords.add(new Coordinate(ChangeCoord.changeCoordWGS84toMeter(coord)));
             }
         }
 
@@ -143,65 +145,67 @@ public class IndoorMapmatchingSim {
     }
 
     private void getIndoorInfoWithSimpleFormat(File inputFile) throws IOException {
-        String line = null;
+        String line;
         int depth = 0;
         ParseStatus parseStatus = ParseStatus.NULL;
         GeometryFactory gf = new GeometryFactory();
         CellSpace cellSpace = null;
-        ArrayList<Coordinate> coords = new ArrayList<Coordinate>();
+        ArrayList<Coordinate> coords = new ArrayList<>();
         BufferedReader reader = new BufferedReader(new FileReader(inputFile));
         while((line = reader.readLine()) != null) {
             String[] predefinedInfo = line.split("\\[");
             if(predefinedInfo.length == 1) {
-                if(predefinedInfo[0].equals("Cell")){
-                    depth++;
-                }
-                else if(predefinedInfo[0].equals("Geom")){
-                    depth++;
-                    parseStatus = ParseStatus.GEOM;
-                }
-                else if(predefinedInfo[0].equals("Door")){
-                    depth++;
-                    parseStatus = ParseStatus.DOOR;
-                }
-                else {
-                    if(predefinedInfo[0].equals("]")) {
-                        depth--;
-                        if(depth == 0) {
-                            ((CanvasPanel)panelCanvas).addCellSpace(cellSpace);
-                        }
-                        else {
-                            switch (parseStatus) {
-                                case GEOM:
-                                    Coordinate[] cellCoords = new Coordinate[coords.size()];
-                                    for(int i = 0; i < coords.size(); i++) {
-                                        cellCoords[i] = new Coordinate(coords.get(i).x, coords.get(i).y);
-                                    }
-                                    CoordinateSequence seq = gf.getCoordinateSequenceFactory().create(cellCoords);
-                                    LinearRing lr = gf.createLinearRing(seq);
-                                    Polygon polygon = gf.createPolygon(lr);
-                                    cellSpace = new CellSpace(polygon);
+                switch (predefinedInfo[0]) {
+                    case "Cell":
+                        depth++;
+                        break;
+                    case "Geom":
+                        depth++;
+                        parseStatus = ParseStatus.GEOM;
+                        break;
+                    case "Door":
+                        depth++;
+                        parseStatus = ParseStatus.DOOR;
+                        break;
+                    default:
+                        if (predefinedInfo[0].equals("]")) {
+                            depth--;
+                            if (depth == 0) {
+                                ((CanvasPanel) panelCanvas).addCellSpace(cellSpace);
+                            } else {
+                                switch (parseStatus) {
+                                    case GEOM:
+                                        Coordinate[] cellCoords = new Coordinate[coords.size()];
+                                        for (int i = 0; i < coords.size(); i++) {
+                                            cellCoords[i] = new Coordinate(coords.get(i).x, coords.get(i).y);
+                                        }
+                                        CoordinateSequence seq = gf.getCoordinateSequenceFactory().create(cellCoords);
+                                        LinearRing lr = gf.createLinearRing(seq);
+                                        Polygon polygon = gf.createPolygon(lr);
+                                        cellSpace = new CellSpace(polygon);
 
-                                    coords.clear();
-                                    break;
-                                case DOOR:
-                                    Coordinate[] doorCoords = new Coordinate[coords.size()];
-                                    for(int i = 0; i < coords.size(); i++) {
-                                        doorCoords[i] = new Coordinate(coords.get(i).x, coords.get(i).y);
-                                    }
-                                    cellSpace.addDoors(gf.createLineString(doorCoords));
+                                        coords.clear();
+                                        break;
+                                    case DOOR:
+                                        Coordinate[] doorCoords = new Coordinate[coords.size()];
+                                        for (int i = 0; i < coords.size(); i++) {
+                                            doorCoords[i] = new Coordinate(coords.get(i).x, coords.get(i).y);
+                                        }
+                                        if (cellSpace != null) {
+                                            cellSpace.addDoors(gf.createLineString(doorCoords));
+                                        }
 
-                                    coords.clear();
-                                    break;
+                                        coords.clear();
+                                        break;
+                                }
                             }
+                        } else {
+                            String[] positionInfo = predefinedInfo[0].split(",");
+                            double positionX = Double.parseDouble(positionInfo[0]);
+                            double positionY = Double.parseDouble(positionInfo[1]);
+                            coords.add(new Coordinate(positionX, positionY));
                         }
-                    }
-                    else {
-                        String[] positionInfo = predefinedInfo[0].split(",");
-                        double positionX = Double.parseDouble(positionInfo[0]);
-                        double positionY = Double.parseDouble(positionInfo[1]);
-                        coords.add(new Coordinate(positionX,positionY));
-                    }
+                        break;
                 }
             }
         }
@@ -239,7 +243,7 @@ public class IndoorMapmatchingSim {
             }
         }
 
-        changeCoord = new ChangeCoord(new Coordinate(min_position_x, min_position_y), new Coordinate(max_position_x,max_position_y));
+        ChangeCoord.setInitialInfo(new Coordinate(min_position_x, min_position_y), new Coordinate(max_position_x,max_position_y));
         ArrayList<CellSpace> cellSpaces = new ArrayList<>();
         ArrayList<LineString> doorGeoms = new ArrayList<>();
         ArrayList<Coordinate> coords = new ArrayList<>();
@@ -258,7 +262,7 @@ public class IndoorMapmatchingSim {
                     if(refNode.getNodeType() == Node.ELEMENT_NODE) {
                         Element refElement = (Element) refNode;
                         int refID = Integer.valueOf(refElement.getAttribute("ref"));
-                        coords.add(changeCoord.changeCordinate(osmNodeInfo.get(refID)));
+                        coords.add(ChangeCoord.changeCoordWGS84toMeter(osmNodeInfo.get(refID)));
                     }
                 }
                 Coordinate[] coordsArray = new Coordinate[coords.size()];
@@ -280,12 +284,11 @@ public class IndoorMapmatchingSim {
                         }
                         else if((tagElement.getAttribute("k").equals("room") || tagElement.getAttribute("k").equals("corridor"))
                                 && tagElement.getAttribute("v").equals("yes")) {
-                            Polygon polygon = null;
                             if(coords.get(0).equals(coords.get(coords.size() - 1))) {
                                 // In case : "way" geometry is closed polygon
                                 CoordinateSequence seq = gf.getCoordinateSequenceFactory().create(coordsArray);
                                 LinearRing lr = gf.createLinearRing(seq);
-                                polygon = gf.createPolygon(lr);
+                                Polygon polygon = gf.createPolygon(lr);
                                 cellSpace = new CellSpace(polygon);
                                 cellSpaces.add(cellSpace);
                             }
@@ -315,10 +318,82 @@ public class IndoorMapmatchingSim {
         }
     }
 
+    private void getIndoorInfoWithIFCFormat(File inputFile) {
+        GeometryFactory gf = new GeometryFactory();
+        ArrayList<CellSpace> cellSpaces = new ArrayList<>();
+
+        Connection connection = DB_Connection.connectToDatabase("conf/moovework.properties");
+        try {
+            DB_WrapperLoad.loadALL(connection, 2);
+            connection.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+
+        ArrayList<Floor> floors = DB_WrapperLoad.floorT;
+        Floor floor = floors.get(0);
+
+        double max_position_x = 0;
+        double max_position_y = 0;
+        double min_position_x = 10000;
+        double min_position_y = 10000;
+        for(Partition partition : floor.getPartsAfterDecomposed()) {
+            if(partition.getPolygon2D().getVertexCount() == 0) // In Case: OutSide
+                continue;
+            Rectangle2D mbr = partition.getPolygon2D().getBounds2D();
+            if (mbr.getMaxX() > max_position_x) max_position_x = mbr.getMaxX();
+            if (mbr.getMaxY() > max_position_y) max_position_y = mbr.getMaxY();
+            if (mbr.getMinX() < min_position_x) min_position_x = mbr.getMinX();
+            if (mbr.getMinY() < min_position_y) min_position_y = mbr.getMinY();
+        }
+        ChangeCoord.setInitialInfo(new Coordinate(min_position_x, min_position_y), new Coordinate(max_position_x,max_position_y));
+
+        for(Partition partition : floor.getPartitions()) {
+            Polygon2D.Double cellGeom = partition.getPolygon2D();
+            if(cellGeom.getVertexCount() == 0) // In Case: OutSide
+                continue;
+            Coordinate[] coordsArray = new Coordinate[cellGeom.getVertexCount() + 1];
+            for(int i = 0; i < coordsArray.length - 1; i++) {
+                coordsArray[i] = ChangeCoord.changeCoordWithRatio(new Coordinate(cellGeom.getX(i), cellGeom.getY(i)));
+            }
+            coordsArray[coordsArray.length - 1] = coordsArray[0];
+
+            CoordinateSequence seq = gf.getCoordinateSequenceFactory().create(coordsArray);
+            LinearRing lr = gf.createLinearRing(seq);
+            Polygon polygon = gf.createPolygon(lr);
+            CellSpace cellSpace = new CellSpace(polygon);
+            cellSpaces.add(cellSpace);
+            if(partition.getName() != null)
+                cellSpace.setLabel(partition.getName());
+
+            for(AccessPoint ap : partition.getAPs()) {
+                Line2D.Double doorGeom = ap.getLine2D();
+                coordsArray = new Coordinate[2];
+                coordsArray[0] = ChangeCoord.changeCoordWithRatio(new Coordinate(doorGeom.getX1(), doorGeom.getY1()));
+                coordsArray[1] = ChangeCoord.changeCoordWithRatio(new Coordinate(doorGeom.getX2(), doorGeom.getY2()));
+                LineString doorGeomJTS = gf.createLineString(coordsArray);
+                if(cellSpace.getGeom().covers(doorGeomJTS)) {
+                    cellSpace.addDoors(doorGeomJTS);
+                } else {
+                    double bufferSize = cellSpace.getGeom().distance(doorGeomJTS);
+
+                    Geometry buffer = doorGeomJTS.buffer(bufferSize + 1);
+                    LineString newDoorGeomJTS = (LineString) buffer.intersection(cellSpace.getGeom().getExteriorRing());//cellSpace.getGeom().intersection(buffer);
+                    if(cellSpace.getGeom().covers(newDoorGeomJTS)) {
+                        cellSpace.addDoors(newDoorGeomJTS);
+                    } else
+                        System.out.println("WTF??");
+                }
+
+            }
+            ((CanvasPanel)panelCanvas).addCellSpace(cellSpace);
+        }
+    }
+
     public static void main(String[] args) {
-        JFrame jFrame = new JFrame("IndoorDistanceTest");
+        JFrame jFrame = new JFrame("Symbolic Indoor Map Matching Simulator");
         jFrame.setContentPane(new IndoorMapmatchingSim().panelMain);
-        jFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        jFrame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         jFrame.pack();
         jFrame.setVisible(true);
     }

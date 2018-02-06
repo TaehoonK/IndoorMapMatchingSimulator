@@ -1,7 +1,7 @@
 package edu.pnu.stem.indoor.util.mapmatching;
 
 import com.vividsolutions.jts.geom.LineString;
-import edu.pnu.stem.indoor.IndoorFeatures;
+import edu.pnu.stem.indoor.feature.IndoorFeatures;
 
 /**
  * Created by STEM_KTH on 2017-07-25.
