@@ -41,7 +41,9 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
         boolean[][] topologyGraph = indoorFeatures.getTopologyGraph();
         for (int i = 0; i < topologyGraph.length; i++) {
             for(int j = 0; j < topologyGraph.length; j++) {
-                if(topologyGraph[i][j]) matrixA[i][j] = 1;
+                if(topologyGraph[i][j]) {
+                    matrixA[i][j] = 1;
+                }
             }
         }
 

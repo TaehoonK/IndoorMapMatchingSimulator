@@ -77,23 +77,28 @@ public class VisibilityGraph {
             pf.calculate();
             Path path = pf.getPath(target);
 
-            ArrayList<Coordinate> pathElement = new ArrayList<>();
-            for (Object object : path) {
-                if (object instanceof Node) {
-                    Node node = (Node) object;
-                    Coordinate coord = (Coordinate) node.getObject();
-                    pathElement.add(coord);
+            if(path != null) {
+                ArrayList<Coordinate> pathElement = new ArrayList<>();
+                for (Object object : path) {
+                    if (object instanceof Node) {
+                        Node node = (Node) object;
+                        Coordinate coord = (Coordinate) node.getObject();
+                        pathElement.add(coord);
+                    }
                 }
-            }
 
-            Coordinate[] resultPathCoords = new Coordinate[pathElement.size()];
-            for(int i = 0; i < pathElement.size(); i++) {
-                resultPathCoords[i] = pathElement.get(i);
+                Coordinate[] resultPathCoords = new Coordinate[pathElement.size()];
+                for(int i = 0; i < pathElement.size(); i++) {
+                    resultPathCoords[i] = pathElement.get(i);
+                }
+                resultPath = (LineString) gf.createLineString(resultPathCoords).reverse();
             }
-            resultPath = gf.createLineString(resultPathCoords);
+            else {
+                System.out.println("Can't find indoor route! Maybe There is no connection between source and target");
+            }
         }
 
-        return (LineString) resultPath.reverse();
+        return resultPath;
     }
 
     /**

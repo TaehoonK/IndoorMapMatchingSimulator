@@ -1,10 +1,12 @@
 package edu.pnu.stem.indoor.util;
 
 import com.vividsolutions.jts.geom.*;
+import com.vividsolutions.jts.operation.distance.DistanceOp;
 import edu.pnu.stem.indoor.feature.CellSpace;
 import edu.pnu.stem.indoor.feature.VisibilityGraph;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 
 /**
@@ -12,8 +14,9 @@ import java.util.HashSet;
  * @author Taehoon Kim, Pusan National University, STEM Lab.
  */
 public class IndoorUtils {
+    public static final int BUFFER_SIZE = 10;
+    public static final int EPSILON = 5;
     private static final GeometryFactory gf = new GeometryFactory();
-    private static final int BUFFER_SIZE = 10;
 
     /**
      * This function provides an indoor route that consider the indoor space geometry for a given trajectory.
@@ -25,7 +28,6 @@ public class IndoorUtils {
     public static LineString getIndoorRoute(LineString trajectory, ArrayList<CellSpace> cellSpaces) {
         // TODO : Make IndoorRoute with way-points (currently make with just two points)
         LineString resultIndoorPath = null;
-        VisibilityGraph graph = new VisibilityGraph();
         int startPCellIndex = -1;
         int endPCellIndex = -1;
 
@@ -80,73 +82,112 @@ public class IndoorUtils {
                     endPCellIndex = cellIndex;
                 }
             }
+
+            if(startPCellIndex != -1 && endPCellIndex != -1) {
+                break;
+            }
             cellIndex++;
         }
 
         if(startPCellIndex == -1 || endPCellIndex == -1) {
-            /*
-            In case : trajectory is defined outside of the cells
-            TODO : Make alert the path of point is must include in Cell Space
-            */
+            // Thick 모델의 경우 벽사이로 좌표가 입력되는 경우를 처리해줘야 한다
+            if(startPCellIndex == -1) {
+                startPCellIndex = getCellSpaceIndexWithEpsilon(startP.getCoordinate(), cellSpaces);
+                startP = getNearestPoint(startP, cellSpaces.get(startPCellIndex).getGeom());
+            }
+            else {
+                endPCellIndex = getCellSpaceIndexWithEpsilon(endP.getCoordinate(), cellSpaces);
+                endP = getNearestPoint(endP, cellSpaces.get(endPCellIndex).getGeom());
+            }
+
+            if(startPCellIndex == -1 || endPCellIndex == -1) {
+                // In case : trajectory is defined outside of the cells
+                // TODO : Make alert the path of point is must include in Cell Space
+                System.out.println("The coordinates were bounced off the building");
+            }
+            else if (startPCellIndex == endPCellIndex) {
+                resultIndoorPath = makeIndoorRouteInCell(startP, endP, cellSpaces.get(startPCellIndex));
+            }
+            else {
+                resultIndoorPath = getIndoorRoute(startPCellIndex, endPCellIndex, startP, endP, cellSpaces);
+                if(resultIndoorPath == null) {
+                    // In case : There is no connection between start and end
+                    // 이 경우, endP에 대해서 startP가 소속된 Cell에 속하도록 보정이 필요
+                    // 아래 두 가지 방법으로 가능. 현재는 2번 방법으로 구현
+                    // 1. startP와 endP간의 직선을 생성, Cellboundary와 교차되는 점을 찾아 해당 점으로 보정
+                    // 2. endP와 Cellboundary간 가장 가까운 점을 찾아 해당 점으로 보정
+                    // 이후 같은 Cell 내에서의 indoor route를 찾는다
+                    endP = getNearestPoint(endP, cellSpaces.get(startPCellIndex).getGeom());
+                    resultIndoorPath = makeIndoorRouteInCell(startP, endP, cellSpaces.get(startPCellIndex));
+                }
+            }
+        }
+        else if(resultIndoorPath == null) {
+            resultIndoorPath = getIndoorRoute(startPCellIndex, endPCellIndex, startP, endP, cellSpaces);
+        }
+
+        return resultIndoorPath;
+    }
+
+    /**
+     * In case : trajectory cover several cell spaces
+     * Consider only same floor's doors connection
+     * TODO : Make door2door graph take into account several floors
+     * */
+    private static LineString getIndoorRoute(int startPCellIndex, int endPCellIndex, Point startP, Point endP, ArrayList<CellSpace> cellSpaces) {
+        LineString resultIndoorPath = null;
+        VisibilityGraph graph = new VisibilityGraph();
+
+        if(startPCellIndex != endPCellIndex) {
+            // Makes door2door graph
+            if(VisibilityGraph.getBaseGraph() == null) {
+                ArrayList<LineString> doors = new ArrayList<>();
+                for (CellSpace cellSpace: cellSpaces) {
+                    ArrayList<LineString> d2dGraph = cellSpace.getDoor2doorEdges();
+                    if(d2dGraph.size() != 0) {
+                        graph.addEdges(d2dGraph);
+                    }
+                    doors.addAll(cellSpace.getDoors());
+                }
+                // Determine whether the indoor model is thin or thick by door objects
+                // If it is a thick model, creates edges for the door2door graph by finding separated two objects but actually same object (door).
+                HashSet<LineString> interDoorGraph = new HashSet<>();
+                for(int i = 0; i < doors.size(); i++) {
+                    for(int j = i + 1; j <  doors.size(); j++) {
+                        LineString doorA = doors.get(i);
+                        LineString doorB = doors.get(j);
+                        if(doorA.equals(doorB)) {
+                            break; // In case: thin model
+                        }
+                        else {
+                            if(doorA.buffer(BUFFER_SIZE,2).covers(doorB)) { // In case: thick model
+                                interDoorGraph.add(gf.createLineString(new Coordinate[]{doorA.getStartPoint().getCoordinate(), doorB.getStartPoint().getCoordinate()}));
+                                interDoorGraph.add(gf.createLineString(new Coordinate[]{doorA.getEndPoint().getCoordinate(), doorB.getEndPoint().getCoordinate()}));
+                            }
+                        }
+                    }
+                }
+                doors.clear();
+                doors.addAll(interDoorGraph);
+                graph.addEdges(doors);
+
+                VisibilityGraph.setBaseGraph(graph.getEdges());
+            }
+            else {
+                // Reuse VisibilityGraph object using base graph
+                graph = VisibilityGraph.getBaseGraph();
+            }
+            // Make point2door edges and reflects it to door2door graph
+            ArrayList<LineString> start2doorGraph =  makePoint2DoorEdge(startP, cellSpaces.get(startPCellIndex));
+            ArrayList<LineString> end2doorGraph =  makePoint2DoorEdge(endP, cellSpaces.get(endPCellIndex));
+            graph.addEdges(start2doorGraph);
+            graph.addEdges(end2doorGraph);
+            // Get point2point shortest path using door2door graph
+            Coordinate[] coords = new Coordinate[]{startP.getCoordinate(), endP.getCoordinate()};
+            resultIndoorPath = graph.getShortestRoute(coords);
         }
         else {
-            /*
-            In case : trajectory cover several cell spaces
-            Consider only same floor's doors connection
-            TODO : Make door2door graph take into account several floors
-            */
-            if(startPCellIndex != endPCellIndex) {
-                // Makes door2door graph
-                if(VisibilityGraph.getBaseGraph() == null) {
-                    ArrayList<LineString> doors = new ArrayList<>();
-                    for (CellSpace cellSpace: cellSpaces) {
-                        ArrayList<LineString> d2dGraph = cellSpace.getDoor2doorEdges();
-                        if(d2dGraph.size() != 0) {
-                            graph.addEdges(d2dGraph);
-                        }
-                        for(LineString door: cellSpace.getDoors()) {
-                            doors.add(door);
-                        }
-                    }
-                    // Determine whether the indoor model is thin or thick by door objects
-                    // If it is a thick model, creates edges for the door2door graph by finding separated two objects but actually same object (door).
-                    HashSet<LineString> interDoorGraph = new HashSet<>();
-                    for(int i = 0; i < doors.size(); i++) {
-                        for(int j = i + 1; j <  doors.size(); j++) {
-                            LineString doorA = doors.get(i);
-                            LineString doorB = doors.get(j);
-                            if(doorA.equals(doorB)) {
-                                break; // In case: thin model
-                            }
-                            else {
-                                if(doorA.buffer(BUFFER_SIZE,2).covers(doorB)) { // In case: thick model
-                                    interDoorGraph.add(gf.createLineString(new Coordinate[]{doorA.getStartPoint().getCoordinate(), doorB.getStartPoint().getCoordinate()}));
-                                    interDoorGraph.add(gf.createLineString(new Coordinate[]{doorA.getEndPoint().getCoordinate(), doorB.getEndPoint().getCoordinate()}));
-                                }
-                            }
-                        }
-                    }
-                    doors.clear();
-                    for(LineString door: interDoorGraph) {
-                        doors.add(door);
-                    }
-                    graph.addEdges(doors);
-
-                    VisibilityGraph.setBaseGraph(graph.getEdges());
-                }
-                else {
-                    // Reuse VisibilityGraph object using base graph
-                    graph = VisibilityGraph.getBaseGraph();
-                }
-                // Make point2door edges and reflects it to door2door graph
-                ArrayList<LineString> start2doorGraph =  makePoint2DoorEdge(startP, cellSpaces.get(startPCellIndex));
-                ArrayList<LineString> end2doorGraph =  makePoint2DoorEdge(endP, cellSpaces.get(endPCellIndex));
-                graph.addEdges(start2doorGraph);
-                graph.addEdges(end2doorGraph);
-                // Get point2point shortest path using door2door graph
-                Coordinate[] coords = new Coordinate[]{startP.getCoordinate(), endP.getCoordinate()};
-                resultIndoorPath = graph.getShortestRoute(coords);
-            }
+            System.out.println("Impossible case: cell Index is same!");
         }
 
         return resultIndoorPath;
@@ -188,11 +229,20 @@ public class IndoorUtils {
      * */
     private static LineString makeIndoorRouteInCell(Point startP, Point endP, CellSpace cellSpace) {
         LineString p2pIndoorPath;
-        VisibilityGraph graph = new VisibilityGraph();
+        Polygon cellSpaceGeom = cellSpace.getGeom();
+
+
+        if(!cellSpaceGeom.covers(startP)) {
+            startP = getNearestPoint(startP, cellSpaceGeom);
+        }
+        else if(!cellSpaceGeom.covers(endP)) {
+            endP = getNearestPoint(endP, cellSpaceGeom);
+        }
+
 
         Coordinate[] coords = new Coordinate[]{startP.getCoordinate(), endP.getCoordinate()};
         LineString lineString = gf.createLineString(coords);
-        Polygon cellSpaceGeom = cellSpace.getGeom();
+
         if(cellSpaceGeom.contains(lineString)) {
             // In case : The Cell contains a straight line between start and end points
             p2pIndoorPath = gf.createLineString(coords);
@@ -203,11 +253,61 @@ public class IndoorUtils {
             Make indoor path using the cell's visibility graph that added temp information(start and end points)
             */
             ArrayList<LineString> temporalGraph = cellSpace.addNodetoVGraph(startP.getCoordinate(), endP.getCoordinate());
+            VisibilityGraph graph = new VisibilityGraph();
             graph.addEdges(temporalGraph);
             p2pIndoorPath = graph.getShortestRoute(coords);
         }
 
         return p2pIndoorPath;
+    }
+
+    private static Point getNearestPoint(Point point, Polygon polygon) {
+        Coordinate[] points = DistanceOp.nearestPoints(polygon, point);
+        point = gf.createPoint(points[0]);
+        return point;
+    }
+
+    /**
+     *
+     * @param targetCoordinate
+     * @param cellSpaces
+     * @return
+     * */
+    public static Integer getCellSpaceIndexWithEpsilon(Coordinate targetCoordinate, ArrayList<CellSpace> cellSpaces) {
+        return getCellSpaceIndexWithEpsilon(targetCoordinate, EPSILON, cellSpaces);
+    }
+
+    /**
+     *
+     * @param targetCoordinate
+     * @param epsilon
+     * @param cellSpaces
+     * @return
+     * */
+    public static Integer getCellSpaceIndexWithEpsilon(Coordinate targetCoordinate, double epsilon, ArrayList<CellSpace> cellSpaces) {
+        Point point = gf.createPoint(targetCoordinate);
+        Polygon bufferedPolygon = (Polygon) point.buffer(epsilon, 2);
+
+        int closestCellIndex = -1;
+        HashMap<Integer, Double> resultWithArea = new HashMap<>();
+        for (CellSpace cellSpace : cellSpaces) {
+            Polygon cellGeometry = cellSpace.getGeom();
+            closestCellIndex++;
+            if(cellGeometry.intersects(bufferedPolygon)){
+                resultWithArea.put(closestCellIndex, cellGeometry.intersection(bufferedPolygon).getArea());
+            }
+        }
+
+        double maxArea = 0;
+        int selectedIndex = -1;
+        for(Integer cellIndex : resultWithArea.keySet()) {
+            if(maxArea < resultWithArea.get(cellIndex)) {
+                maxArea = resultWithArea.get(cellIndex);
+                selectedIndex = cellIndex;
+            }
+        }
+
+        return selectedIndex;
     }
 
     /**

@@ -25,7 +25,10 @@ import java.awt.geom.Rectangle2D;
 import java.io.*;
 import java.sql.Connection;
 import java.sql.SQLException;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 
 /**
@@ -37,7 +40,7 @@ public class IndoorMapmatchingSim {
     public final static double CANVAS_RIGHT_LOWER_Y = 1500;
     public final static double CANVAS_LEFT_UPPER_X = 0;
     public final static double CANVAS_LEFT_UPPER_Y = 0;
-
+    private GeometryFactory gf;
     private JPanel panelMain;
     private JButton buttonCreateCell;
     private JPanel panelCanvas;
@@ -47,7 +50,7 @@ public class IndoorMapmatchingSim {
     private JButton buttonCreateDoor;
     private JButton buttonGetPreparedInfo;
     private JButton buttonCreateHole;
-    private JButton buttonGetRelatedEdge;
+    private JButton buttonGetGroundTruth;
     private JButton buttonGetOSMData;
     private JButton buttonGetCreateTrajectory;
     private JButton buttonDirectMapMatching;
@@ -55,6 +58,7 @@ public class IndoorMapmatchingSim {
 
     private IndoorMapmatchingSim() {
         panelMain.setSize(1000,1000);
+        gf = new GeometryFactory();
 
         buttonGetPreparedInfo.addActionListener(e -> {
             JFileChooser fileChooser = new JFileChooser("C:\\Users\\timeo\\IdeaProjects\\github\\IndoorMapmatching");
@@ -87,6 +91,8 @@ public class IndoorMapmatchingSim {
             }
         });
         buttonGetIFCData.addActionListener(e -> {
+            getIndoorInfoWithIFCFormat();
+            /*
             JFileChooser fileChooser = new JFileChooser("C:\\Users\\timeo\\IdeaProjects\\github\\IndoorMapmatching");
             FileNameExtensionFilter filter = new FileNameExtensionFilter("IFC Data (*.ifc)", "ifc");
             fileChooser.setFileFilter(filter);
@@ -96,15 +102,15 @@ public class IndoorMapmatchingSim {
                 File file = fileChooser.getSelectedFile();
                 getIndoorInfoWithIFCFormat(file);
             }
+            */
         });
         buttonCreateCell.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.CREATE_CELLSPACE);
         buttonCreatePath.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.CREATE_TRAJECTORY);
         buttonSelectCell.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.SELECT_CELLSPACE);
         buttonPathEvaluate.addActionListener(e -> ((CanvasPanel)panelCanvas).syntheticTrajectoryTest());
         buttonCreateHole.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.CREATE_HOLE);
-        buttonGetRelatedEdge.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.GET_RELATED_EDGE);
-        buttonGetCreateTrajectory.addActionListener(e -> {
-            JFileChooser fileChooser = new JFileChooser("D:\\InteliJ\\github\\IndoorMapmatching");
+        buttonGetGroundTruth.addActionListener(e -> {
+            JFileChooser fileChooser = new JFileChooser("C:\\Users\\timeo\\IdeaProjects\\github\\IndoorMapmatching");
             FileNameExtensionFilter filter = new FileNameExtensionFilter("txt (*.txt)", "txt");
             fileChooser.setFileFilter(filter);
 
@@ -112,21 +118,42 @@ public class IndoorMapmatchingSim {
             if (returnVal == JFileChooser.APPROVE_OPTION) {
                 File file = fileChooser.getSelectedFile();
                 try {
-                    getBuildNGoData(file);
+                    getVITAData(file);
                 } catch (IOException e1) {
+                    e1.printStackTrace();
+                } catch (ParseException e1) {
                     e1.printStackTrace();
                 }
             }
+            ((CanvasPanel)panelCanvas).getDIMMResult();
         });
-        buttonDirectMapMatching.addActionListener(e -> ((CanvasPanel)panelCanvas).evaluateDirectIndoorMapMatching());
+        buttonGetCreateTrajectory.addActionListener(e -> {
+            JFileChooser fileChooser = new JFileChooser("C:\\Users\\timeo\\IdeaProjects\\github\\IndoorMapmatching");
+            FileNameExtensionFilter filter = new FileNameExtensionFilter("txt (*.txt)", "txt");
+            fileChooser.setFileFilter(filter);
+
+            int returnVal = fileChooser.showOpenDialog(panelMain);
+            if (returnVal == JFileChooser.APPROVE_OPTION) {
+                File file = fileChooser.getSelectedFile();
+                try {
+                    //getBuildNGoData(file);
+                    getVITAData(file);
+                } catch (IOException e1) {
+                    e1.printStackTrace();
+                } catch (ParseException e1) {
+                    e1.printStackTrace();
+                }
+            }
+            ((CanvasPanel)panelCanvas).evaluateIndoorMapMatching();
+        });
+        buttonDirectMapMatching.addActionListener(e -> ((CanvasPanel)panelCanvas).evaluateIndoorMapMatching());
     }
 
     private void getBuildNGoData(File inputFile) throws IOException {
         String line;
-        GeometryFactory gf = new GeometryFactory();
         ArrayList<Coordinate> coords = new ArrayList<>();
-
         BufferedReader reader = new BufferedReader(new FileReader(inputFile));
+
         while((line = reader.readLine()) != null) {
             if(line.split("/").length > 1) {
                 Coordinate coord = new Coordinate(Double.valueOf(line.split("/")[1]),
@@ -139,8 +166,79 @@ public class IndoorMapmatchingSim {
         for(int i = 0; i < coords.size(); i++) {
             trajectoryData[i] = coords.get(i);
         }
-
         LineString loadedTrajectory = gf.createLineString(trajectoryData);
+
+        ((CanvasPanel)panelCanvas).setTrajectory(loadedTrajectory);
+    }
+
+    private void getVITAData(File inputFile) throws IOException, ParseException {
+        String line;
+        ArrayList<Coordinate> coords = new ArrayList<>();
+        ArrayList<Coordinate> coordsInASec = new ArrayList<>();
+        BufferedReader reader = new BufferedReader(new FileReader(inputFile));
+        Date prevDate = null;
+        Boolean isRawData = false;
+        line = reader.readLine(); // first line is header part
+
+        while((line = reader.readLine()) != null) {
+            if(line.split("\t").length > 1) {
+                String[] parsedResult = line.split("\t");
+                // parsedResult is composed as follows
+                // floorId | partitionId | location_x | location_y | timeStamp
+                Coordinate coord = new Coordinate(Double.valueOf(parsedResult[2]),
+                        Double.valueOf(parsedResult[3]));
+                coordsInASec.add(coord);
+                if(!isRawData) {
+                    coords.add(new Coordinate(ChangeCoord.changeCoordWithRatio(coord)));
+                }
+
+                SimpleDateFormat dt = new SimpleDateFormat("yyyy/mm/dd hh:mm:ss");
+                Date curDate = dt.parse(parsedResult[4]);
+
+                if(prevDate == null) {
+                    prevDate = curDate;
+                }
+                else if(!isRawData) {
+                    if(prevDate.equals(curDate)) {
+                        isRawData = true;
+                        if(coords.size() == 3) {
+                            Coordinate first = coords.get(0);
+                            coords.clear();
+                            coords.add(first);
+                        }
+                        else {
+                            coords.clear();
+                        }
+                    }
+                }
+                else {
+                    if(!prevDate.equals(curDate)) {
+                        // create an average coordinate while in a second
+                        double avrCoordX = 0;
+                        double avrCoordY = 0;
+                        for(Coordinate c : coordsInASec) {
+                            avrCoordX += c.x;
+                            avrCoordY += c.y;
+                        }
+                        avrCoordX /= coordsInASec.size();
+                        avrCoordY /= coordsInASec.size();
+
+                        Coordinate coordinate = new Coordinate(avrCoordX,avrCoordY);
+                        coords.add(new Coordinate(ChangeCoord.changeCoordWithRatio(coordinate)));
+                        coordsInASec.clear();
+                    }
+                }
+
+                prevDate = curDate;
+            }
+        }
+
+        Coordinate[] trajectoryData = new Coordinate[coords.size()];
+        for(int i = 0; i < coords.size(); i++) {
+            trajectoryData[i] = coords.get(i);
+        }
+        LineString loadedTrajectory = gf.createLineString(trajectoryData);
+
         ((CanvasPanel)panelCanvas).setTrajectory(loadedTrajectory);
     }
 
@@ -148,7 +246,6 @@ public class IndoorMapmatchingSim {
         String line;
         int depth = 0;
         ParseStatus parseStatus = ParseStatus.NULL;
-        GeometryFactory gf = new GeometryFactory();
         CellSpace cellSpace = null;
         ArrayList<Coordinate> coords = new ArrayList<>();
         BufferedReader reader = new BufferedReader(new FileReader(inputFile));
@@ -217,7 +314,6 @@ public class IndoorMapmatchingSim {
         Document document = dBuilder.parse(inputFile);
         document.getDocumentElement().normalize();
 
-        GeometryFactory gf = new GeometryFactory();
         HashMap<Integer, Coordinate> osmNodeInfo = new HashMap<>();
 
         double max_position_x = 0;
@@ -318,8 +414,7 @@ public class IndoorMapmatchingSim {
         }
     }
 
-    private void getIndoorInfoWithIFCFormat(File inputFile) {
-        GeometryFactory gf = new GeometryFactory();
+    private void getIndoorInfoWithIFCFormat() {
         ArrayList<CellSpace> cellSpaces = new ArrayList<>();
 
         Connection connection = DB_Connection.connectToDatabase("conf/moovework.properties");

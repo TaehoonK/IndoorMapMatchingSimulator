@@ -48,7 +48,7 @@ public class DirectIndoorMapMatching implements IndoorMapMatching {
                 If there is more than one DIMM result for one coordinate
                 If there exist the same value as the DIMM result for the previous coordinate,
                 it is set to that value, otherwise it is decided as the first value
-                */
+                * */
                 dimmResult[i] = -1;
                 for (int aCandidateCellIndexArray : candidateCellIndexArray) {
                     if (i > 0 && dimmResult[i - 1] == aCandidateCellIndexArray) {

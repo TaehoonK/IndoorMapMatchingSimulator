@@ -25,10 +25,12 @@ import java.util.Random;
  * @author Taehoon Kim, Pusan National University, STEM Lab.
  */
 public class CanvasPanel extends JPanel implements MouseListener, MouseMotionListener, MouseWheelListener, KeyListener {
-    private static final double SNAP_THRESHOLD = 10; //SNAP_THRESHOLD value for snapping function
-    private static final double POINTRADIUS = 5; //POINTRADIUS value for draw point(circle shape)
-    private static final double SCREENBUFFER = 50; //SCREENBUFFER value
-    private static final int ARR_SIZE = 8;
+    private static final double SNAP_THRESHOLD = 10; // SNAP_THRESHOLD value for snapping function
+    private static final double POINTRADIUS = 5;    // POINTRADIUS value for draw point(circle shape)
+    private static final double SCREENBUFFER = 50;  // SCREENBUFFER value
+    private static final int ARR_SIZE = 8;          // Arrow size for directed line
+
+    private static final double MAX_DISTANCE = 50;  // The distance that humans can move per unit time
 
     EditStatus currentEditStatus = null;
 
@@ -71,17 +73,24 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         repaint();
     }
 
-    void evaluateDirectIndoorMapMatching() {
+    void getDIMMResult() {
+        if(indoorFeatures != null && trajectory != null) {
+            DirectIndoorMapMatching dimm = new DirectIndoorMapMatching(indoorFeatures);
+            System.out.println("==Ground truth==");
+            printMapMatchingResult(dimm.getMapMatchingResult(trajectory));
+        }
+    }
+
+    void evaluateIndoorMapMatching() {
         if(indoorFeatures != null && trajectory != null) {
             DirectIndoorMapMatching dimm = new DirectIndoorMapMatching(indoorFeatures);
             HMMIndoorMapMatching himm = new HMMIndoorMapMatching(indoorFeatures);
-            System.out.println("=============original trajectory=============");
-            System.out.println("=============DIMM=============");
+            System.out.println("==original trajectory==");
+            System.out.println("==DIMM==");
             printMapMatchingResult(dimm.getMapMatchingResult(trajectory));
-            System.out.println("=============HIMM=============");
+            System.out.println("==HIMM==");
             printMapMatchingResult(himm.getMapMatchingResult(trajectory));
 
-            double MAX_DISTANCE = 40;
             if(trajectory.getLength() > MAX_DISTANCE) {
                 LineString lineWithMaxIndoorDistance = null;
                 try {
@@ -89,10 +98,10 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
-                System.out.println("=============Indoor maximum distance filtered trajectory=============");
-                System.out.println("=============DIMM=============");
+                System.out.println("==Indoor distance filtered trajectory==");
+                System.out.println("==DIMM==");
                 printMapMatchingResult(dimm.getMapMatchingResult(lineWithMaxIndoorDistance));
-                System.out.println("=============HIMM=============");
+                System.out.println("==HIMM==");
                 printMapMatchingResult(himm.getMapMatchingResult(lineWithMaxIndoorDistance));
             }
         }
@@ -101,7 +110,8 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
     private void printMapMatchingResult(String[] mapMatchingResult) {
         for(int i = 0; i < trajectory.getNumPoints(); i++){
             Coordinate coord = trajectory.getCoordinateN(i);
-            System.out.printf("Point Coord (%f,%f) : %s\n", coord.x, coord.y, mapMatchingResult[i]);
+            //System.out.printf("Point Coord (%f,%f) : %s\n", coord.x, coord.y, mapMatchingResult[i]);
+            System.out.printf("%s\n", mapMatchingResult[i]);
         }
     }
 
@@ -112,8 +122,11 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         Graphics2D g2 = (Graphics2D)g;
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setStroke(new BasicStroke(2));
+        g2.setFont(new Font("Serif", Font.PLAIN, 20));
 
         /*
+        // draw mouse point coordinate
+        // it related with mouseMoved function
         g2.setFont(new Font("Serif", Font.PLAIN, 20));
         g2.drawString((mousePositionX - SCREENBUFFER) + "," + (mousePositionY - SCREENBUFFER), 20,20);
         g2.drawString(mousePositionX + "," + mousePositionY, 20,20);
@@ -124,6 +137,15 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
             for (CellSpace cellSpace : indoorFeatures.getCellSpaces()) {
                 Polygon polygon = cellSpace.getGeom();
                 cellIndex++;
+
+                float drawPositionX = addScreenBuffer(polygon.getCentroid().getX()).floatValue();
+                float drawPositionY = addScreenBuffer(polygon.getCentroid().getY()).floatValue();
+                g2.setColor(Color.BLACK);
+                g2.drawString(String.valueOf(cellIndex), drawPositionX, drawPositionY);
+                if(cellSpace.getLabel() != null) {
+                    g2.drawString("(" + cellSpace.getLabel() + ")", drawPositionX, drawPositionY + 20);
+                }
+
                 if(currentEditStatus == EditStatus.SELECT_CELLSPACE && cellIndex == selectedCellIndex) {
                     drawLines(g2, polygon.getExteriorRing().getCoordinates(), Color.RED, true);
                     for(int i = 0; i < polygon.getNumInteriorRing(); i++) {
@@ -140,7 +162,7 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
                 ArrayList<LineString> doors = cellSpace.getDoors();
                 for (LineString lineString: doors) {
                     drawLines(g2, lineString.getCoordinates(), Color.YELLOW, false);
-                    drawLines(g2, lineString.buffer(10,2).getCoordinates(), Color.RED, false);
+                    //drawLines(g2, lineString.buffer(10,2).getCoordinates(), Color.RED, false);
                 }
 
                 /*
@@ -172,9 +194,8 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         if(trajectory != null) {
             drawArrowLines(g2, trajectory.getCoordinates(), Color.GREEN);
             System.out.println("original trajectory N : " + trajectory.getNumPoints());
+
             // TODO : Remove it(Temporary case)
-            /*
-            double MAX_DISTANCE = 40;
             if(trajectory.getLength() > MAX_DISTANCE) {
                 LineString lineWithMaxIndoorDistance = null;
                 try {
@@ -185,7 +206,6 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
                 drawArrowLines(g2, lineWithMaxIndoorDistance.getCoordinates(), Color.RED);
                 System.out.println("corrected trajectory N : " + lineWithMaxIndoorDistance.getNumPoints());
             }
-            */
         }
         if(drawingCellCoords != null) {
             if(drawingCellCoords.length == 1) {

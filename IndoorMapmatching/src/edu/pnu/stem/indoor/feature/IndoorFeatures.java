@@ -2,6 +2,7 @@ package edu.pnu.stem.indoor.feature;
 
 import com.vividsolutions.jts.geom.*;
 import java.util.ArrayList;
+
 import edu.pnu.stem.indoor.util.IndoorUtils;
 
 /**
@@ -65,6 +66,7 @@ public class IndoorFeatures {
      * */
     public String getCellSpaceLabel(int cellSpaceIndex) {
         return cellSpaces.get(cellSpaceIndex).getLabel();
+
     }
 
     /**
@@ -81,16 +83,18 @@ public class IndoorFeatures {
         int closestCellIndex = -1;
         Point point = gf.createPoint(coordinate);
         for (CellSpace cellSpace : cellSpaces) {
-            Polygon polygon = cellSpace.getGeom();
+            Polygon cellGeometry = cellSpace.getGeom();
             closestCellIndex++;
-            if(polygon.covers(point)){
+            if(cellGeometry.covers(point)){
                 resultList.add(closestCellIndex);
             }
         }
 
         int[] resultArray;
         if(resultList.isEmpty()) {
-            resultArray = new int[]{-1};
+            // If the map matching result is not generated, map matching is performed again using an Epsilon-sized buffer
+            int selectedIndex = IndoorUtils.getCellSpaceIndexWithEpsilon(point.getCoordinate(), cellSpaces);
+            resultArray = new int[]{selectedIndex};
         }
         else {
             resultArray = new int[resultList.size()];
@@ -145,7 +149,8 @@ public class IndoorFeatures {
                 ArrayList<LineString> toDoors = to.getDoors();
                 for(LineString fromDoor : fromDoors) {
                     for(LineString toDoor : toDoors) {
-                        if(fromDoor.equals(toDoor)){
+                        int BUFFER_SIZE = IndoorUtils.BUFFER_SIZE;
+                        if(fromDoor.buffer(BUFFER_SIZE,2).covers(toDoor)){
                             topologyGraph[i][j] = true;
                             topologyGraph[j][i] = true;
                         }
