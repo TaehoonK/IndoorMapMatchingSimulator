@@ -1,9 +1,6 @@
 package edu.pnu.stem.indoor.util.mapmatching;
 
-import com.vividsolutions.jts.geom.Coordinate;
-import com.vividsolutions.jts.geom.Geometry;
-import com.vividsolutions.jts.geom.LineString;
-import com.vividsolutions.jts.geom.Polygon;
+import com.vividsolutions.jts.geom.*;
 import com.vividsolutions.jts.util.GeometricShapeFactory;
 import edu.pnu.stem.indoor.feature.IndoorFeatures;
 import edu.pnu.stem.indoor.util.mapmatching.etc.HiddenMarkovModel;
@@ -12,24 +9,31 @@ import edu.pnu.stem.indoor.util.IndoorUtils;
 import java.util.ArrayList;
 
 /**
+ *
+ *
  * Created by STEM_KTH on 2017-08-01.
  * @author Taehoon Kim, Pusan National University, STEM Lab.
  * */
 public class HMMIndoorMapMatching implements IndoorMapMatching {
     private final double CIRCLE_SIZE = 10;
     private final double BUFFER_LENGTH = 10;
+
     private IndoorFeatures indoorFeatures;
     private DirectIndoorMapMatching dimm;
     private HiddenMarkovModel hmm;
+    private Geometry[] rawCircleBufferGeometries;
 
     public HMMIndoorMapMatching(IndoorFeatures indoorFeatures){
         dimm = new DirectIndoorMapMatching(indoorFeatures);
         hmm = new HiddenMarkovModel(indoorFeatures.getCellSpaces().size());
-
+        for(int i = 0; i < indoorFeatures.getCellSpaces().size(); i++) {
+            rawCircleBufferGeometries[i] = null;
+        }
         setIndoorFeatures(indoorFeatures);
+
         // Set variable of Hidden Markov Model
         makeAMatrixOnlyTopology();
-        makeBMatrixOnlyCellBuffer(BUFFER_LENGTH);
+        makeBMatrixCellBuffer(BUFFER_LENGTH);
     }
 
     /**
@@ -78,7 +82,7 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
     /**
      * @param bufferLength
      * */
-    public void makeBMatrixOnlyCellBuffer(final double bufferLength) {
+    public void makeBMatrixCellBuffer(final double bufferLength) {
         double[][] matrixB = hmm.getRawMatrixB();
 
         for(int i = 0; i < hmm.getNumOfState(); i++) {
@@ -95,7 +99,37 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
                 }
             }
         }
+        // normalization
+        matrixB = normalization(matrixB);
 
+        hmm.setMatrixB(matrixB);
+    }
+
+    /**
+     * TODO: Window Size에 대한 개념 추가 필요
+     * @param bufferLength
+     * @param lastCoord
+     * */
+    public void makeBmatrixCircleBuffer(final Coordinate lastCoord, final double bufferLength) {
+        double[][] matrixB = hmm.getRawMatrixB();
+
+        Polygon circleBuffer = createCircle(lastCoord, bufferLength);
+        int[] i_list = indoorFeatures.getCellSpaceIndex(lastCoord);
+        int i = i_list[0];
+
+        if(rawCircleBufferGeometries[i] == null) {
+            rawCircleBufferGeometries[i] = circleBuffer;
+        }
+        else {
+            rawCircleBufferGeometries[i] = rawCircleBufferGeometries[i].union(circleBuffer);
+        }
+
+        for(int j = 0; j < hmm.getNumOfState(); j++) {
+            Polygon cellGeom = indoorFeatures.getCellSpace(j).getGeom();
+            if(cellGeom.intersects(rawCircleBufferGeometries[i])) {
+                matrixB[i][j] = cellGeom.intersection(rawCircleBufferGeometries[i]).getArea();
+            }
+        }
         // normalization
         matrixB = normalization(matrixB);
 
@@ -209,7 +243,7 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
         return matrix;
     }
 
-    private Geometry createCircle(Coordinate centerP, final double radius) {
+    private Polygon createCircle(Coordinate centerP, final double radius) {
         GeometricShapeFactory geometricShapeFactory = new GeometricShapeFactory();
         geometricShapeFactory.setNumPoints(16);
         geometricShapeFactory.setCentre(centerP);

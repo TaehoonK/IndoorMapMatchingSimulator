@@ -127,6 +127,7 @@ public class IndoorFeatures {
         int cellNumber = cellSpaces.size();
         topologyGraph = new boolean[cellNumber][cellNumber];
 
+        // initialize step
         for (int i = 0; i < cellSpaces.size(); i++) {
             for (int j = i; j < cellSpaces.size(); j++) {
                 if(i == j) {

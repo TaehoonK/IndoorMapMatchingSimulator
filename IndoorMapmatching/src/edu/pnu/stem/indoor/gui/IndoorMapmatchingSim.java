@@ -53,8 +53,9 @@ public class IndoorMapmatchingSim {
     private JButton buttonGetGroundTruth;
     private JButton buttonGetOSMData;
     private JButton buttonGetCreateTrajectory;
-    private JButton buttonDirectMapMatching;
     private JButton buttonGetIFCData;
+    private JTextPane textPaneOriginal;
+    private JScrollPane jScrollPane;
 
     private IndoorMapmatchingSim() {
         panelMain.setSize(1000,1000);
@@ -110,7 +111,7 @@ public class IndoorMapmatchingSim {
         buttonPathEvaluate.addActionListener(e -> ((CanvasPanel)panelCanvas).syntheticTrajectoryTest());
         buttonCreateHole.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.CREATE_HOLE);
         buttonGetGroundTruth.addActionListener(e -> {
-            JFileChooser fileChooser = new JFileChooser("C:\\Users\\timeo\\IdeaProjects\\github\\IndoorMapmatching");
+            JFileChooser fileChooser = new JFileChooser("C:\\Users\\timeo\\IdeaProjects\\github\\vita-master\\export3\\raw trajectory\\2018_02_13_10_06_02");
             FileNameExtensionFilter filter = new FileNameExtensionFilter("txt (*.txt)", "txt");
             fileChooser.setFileFilter(filter);
 
@@ -118,35 +119,51 @@ public class IndoorMapmatchingSim {
             if (returnVal == JFileChooser.APPROVE_OPTION) {
                 File file = fileChooser.getSelectedFile();
                 try {
-                    getVITAData(file);
+                    System.out.println("File Name: " + file.getName());
+                    ((CanvasPanel)panelCanvas).setTrajectory(getVITAData(file));
                 } catch (IOException e1) {
                     e1.printStackTrace();
                 } catch (ParseException e1) {
                     e1.printStackTrace();
                 }
             }
-            ((CanvasPanel)panelCanvas).getDIMMResult();
+            ((CanvasPanel)panelCanvas).getGroundTruthResult(textPaneOriginal);
         });
         buttonGetCreateTrajectory.addActionListener(e -> {
-            JFileChooser fileChooser = new JFileChooser("C:\\Users\\timeo\\IdeaProjects\\github\\IndoorMapmatching");
+            JFileChooser fileChooser = new JFileChooser("C:\\Users\\timeo\\IdeaProjects\\github\\vita-master\\export3\\indoor positioning data\\2018_02_13_10_49_50");
             FileNameExtensionFilter filter = new FileNameExtensionFilter("txt (*.txt)", "txt");
             fileChooser.setFileFilter(filter);
 
+            String groundTruthFileName = "Dest_Traj_";
             int returnVal = fileChooser.showOpenDialog(panelMain);
             if (returnVal == JFileChooser.APPROVE_OPTION) {
                 File file = fileChooser.getSelectedFile();
                 try {
+                    System.out.println("File Name: " + file.getName());
+                    String[] fileName = file.getName().split("_");
+                    groundTruthFileName += fileName[fileName.length - 1];
                     //getBuildNGoData(file);
-                    getVITAData(file);
+                    ((CanvasPanel)panelCanvas).setTrajectory(getVITAData(file));
                 } catch (IOException e1) {
                     e1.printStackTrace();
                 } catch (ParseException e1) {
                     e1.printStackTrace();
                 }
             }
-            ((CanvasPanel)panelCanvas).evaluateIndoorMapMatching();
+            ((CanvasPanel)panelCanvas).evaluateIndoorMapMatching(textPaneOriginal);
+
+            String RAW_TR_PATH = "C:\\Users\\timeo\\IdeaProjects\\github\\vita-master\\export3\\raw trajectory\\2018_02_13_10_06_02\\";
+            File groundTruth = new File(RAW_TR_PATH + groundTruthFileName);
+            try {
+                ((CanvasPanel)panelCanvas).setTrajectory_GT(getVITAData(groundTruth));
+            } catch (IOException e1) {
+                e1.printStackTrace();
+            } catch (ParseException e1) {
+                e1.printStackTrace();
+            }
+            ((CanvasPanel)panelCanvas).getGroundTruthResult(textPaneOriginal);
+            System.out.println(groundTruthFileName);
         });
-        buttonDirectMapMatching.addActionListener(e -> ((CanvasPanel)panelCanvas).evaluateIndoorMapMatching());
     }
 
     private void getBuildNGoData(File inputFile) throws IOException {
@@ -171,7 +188,7 @@ public class IndoorMapmatchingSim {
         ((CanvasPanel)panelCanvas).setTrajectory(loadedTrajectory);
     }
 
-    private void getVITAData(File inputFile) throws IOException, ParseException {
+    private LineString getVITAData(File inputFile) throws IOException, ParseException {
         String line;
         ArrayList<Coordinate> coords = new ArrayList<>();
         ArrayList<Coordinate> coordsInASec = new ArrayList<>();
@@ -185,6 +202,11 @@ public class IndoorMapmatchingSim {
                 String[] parsedResult = line.split("\t");
                 // parsedResult is composed as follows
                 // floorId | partitionId | location_x | location_y | timeStamp
+
+                if(((CanvasPanel)panelCanvas).floorId != Integer.valueOf(parsedResult[0])) {
+                    break;
+                }
+
                 Coordinate coord = new Coordinate(Double.valueOf(parsedResult[2]),
                         Double.valueOf(parsedResult[3]));
                 coordsInASec.add(coord);
@@ -214,18 +236,13 @@ public class IndoorMapmatchingSim {
                 else {
                     if(!prevDate.equals(curDate)) {
                         // create an average coordinate while in a second
-                        double avrCoordX = 0;
-                        double avrCoordY = 0;
-                        for(Coordinate c : coordsInASec) {
-                            avrCoordX += c.x;
-                            avrCoordY += c.y;
-                        }
-                        avrCoordX /= coordsInASec.size();
-                        avrCoordY /= coordsInASec.size();
+                        Coordinate nextCoord = coordsInASec.get(coordsInASec.size() - 1);
+                        coordsInASec.remove(coordsInASec.size() - 1);
 
-                        Coordinate coordinate = new Coordinate(avrCoordX,avrCoordY);
+                        Coordinate coordinate = getAverageCoordinate(coordsInASec);
                         coords.add(new Coordinate(ChangeCoord.changeCoordWithRatio(coordinate)));
                         coordsInASec.clear();
+                        coordsInASec.add(nextCoord);
                     }
                 }
 
@@ -233,13 +250,31 @@ public class IndoorMapmatchingSim {
             }
         }
 
+        if(!coordsInASec.isEmpty() && isRawData) {
+            Coordinate coordinate = getAverageCoordinate(coordsInASec);
+            coords.add(new Coordinate(ChangeCoord.changeCoordWithRatio(coordinate)));
+            coordsInASec.clear();
+        }
+
         Coordinate[] trajectoryData = new Coordinate[coords.size()];
         for(int i = 0; i < coords.size(); i++) {
             trajectoryData[i] = coords.get(i);
         }
         LineString loadedTrajectory = gf.createLineString(trajectoryData);
+        return  loadedTrajectory;
+    }
 
-        ((CanvasPanel)panelCanvas).setTrajectory(loadedTrajectory);
+    private Coordinate getAverageCoordinate(ArrayList<Coordinate> coordsInASec) {
+        double avrCoordX = 0;
+        double avrCoordY = 0;
+        for(Coordinate c : coordsInASec) {
+            avrCoordX += c.x;
+            avrCoordY += c.y;
+        }
+        avrCoordX /= coordsInASec.size();
+        avrCoordY /= coordsInASec.size();
+
+        return new Coordinate(avrCoordX,avrCoordY);
     }
 
     private void getIndoorInfoWithSimpleFormat(File inputFile) throws IOException {
@@ -419,7 +454,7 @@ public class IndoorMapmatchingSim {
 
         Connection connection = DB_Connection.connectToDatabase("conf/moovework.properties");
         try {
-            DB_WrapperLoad.loadALL(connection, 2);
+            DB_WrapperLoad.loadALL(connection, 3);
             connection.close();
         } catch (SQLException e) {
             e.printStackTrace();
@@ -482,6 +517,7 @@ public class IndoorMapmatchingSim {
 
             }
             ((CanvasPanel)panelCanvas).addCellSpace(cellSpace);
+            ((CanvasPanel)panelCanvas).floorId = floor.getItemID();
         }
     }
 
@@ -496,6 +532,6 @@ public class IndoorMapmatchingSim {
     private void createUIComponents() {
         // TODO: Place custom component creation code here
         panelCanvas = new CanvasPanel();
-        panelCanvas.setSize(600, 600);
+        jScrollPane = new JScrollPane(panelCanvas);
     }
 }

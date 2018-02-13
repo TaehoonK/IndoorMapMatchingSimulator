@@ -3,9 +3,9 @@ package edu.pnu.stem.indoor.gui;
 import com.vividsolutions.jts.geom.*;
 import com.vividsolutions.jts.geom.Point;
 import com.vividsolutions.jts.geom.Polygon;
-import com.vividsolutions.jts.operation.buffer.BufferOp;
 import edu.pnu.stem.indoor.feature.CellSpace;
 import edu.pnu.stem.indoor.feature.IndoorFeatures;
+import edu.pnu.stem.indoor.util.ChangeCoord;
 import edu.pnu.stem.indoor.util.IndoorUtils;
 import edu.pnu.stem.indoor.util.SyntheticTrajectoryGenerator;
 import edu.pnu.stem.indoor.util.TimeTableElement;
@@ -21,6 +21,8 @@ import java.util.ArrayList;
 import java.util.Random;
 
 /**
+ *
+ *
  * Created by STEM_KTH on 2017-05-17.
  * @author Taehoon Kim, Pusan National University, STEM Lab.
  */
@@ -29,8 +31,9 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
     private static final double POINTRADIUS = 5;    // POINTRADIUS value for draw point(circle shape)
     private static final double SCREENBUFFER = 50;  // SCREENBUFFER value
     private static final int ARR_SIZE = 8;          // Arrow size for directed line
+    private static final double MAX_DISTANCE = ChangeCoord.CANVAS_MULTIPLE * 3;  // The distance that humans can move per unit time
 
-    private static final double MAX_DISTANCE = 50;  // The distance that humans can move per unit time
+    public static int floorId;
 
     EditStatus currentEditStatus = null;
 
@@ -39,6 +42,8 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
     private GeometryFactory gf = null;
     private IndoorFeatures indoorFeatures = null;
     private LineString trajectory = null;
+    private LineString trajectory_IF = null;
+    private LineString trajectory_GT = null;
     private Coordinate[] drawingCellCoords = null;
     private Coordinate trajectoryCoords = null;
     private ArrayList<LineString> relatedVisibilityEdge = null;
@@ -73,37 +78,90 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         repaint();
     }
 
-    void getDIMMResult() {
-        if(indoorFeatures != null && trajectory != null) {
-            DirectIndoorMapMatching dimm = new DirectIndoorMapMatching(indoorFeatures);
-            System.out.println("==Ground truth==");
-            printMapMatchingResult(dimm.getMapMatchingResult(trajectory));
-        }
+    void setTrajectory_IF(LineString indoorFilteredTrajectory) {
+        this.trajectory_IF = indoorFilteredTrajectory;
+        repaint();
     }
 
-    void evaluateIndoorMapMatching() {
+    void setTrajectory_GT(LineString groundTruthTrajectory) {
+        this.trajectory_GT = groundTruthTrajectory;
+        repaint();
+    }
+
+    void getGroundTruthResult(JTextPane textPaneOriginal) {
+        StringBuilder result = new StringBuilder();
+        if(indoorFeatures != null && trajectory_GT != null) {
+            DirectIndoorMapMatching dimm = new DirectIndoorMapMatching(indoorFeatures);
+            result.append("==Ground truth==\n");
+            printMapMatchingResults(result, dimm.getMapMatchingResult(trajectory_GT));
+        }
+        // Calculate a average error between ground truth and positioning trajectory
+        if(trajectory != null && trajectory_IF != null) {
+            double error_Original = 0;
+            double error_IndoorFilter = 0;
+            for(int i = 0; i < trajectory.getNumPoints(); i++){
+                Coordinate gtCoord = trajectory_GT.getCoordinateN(i);
+                Coordinate pCoord = trajectory.getCoordinateN(i);
+                Coordinate ifCoord = trajectory_IF.getCoordinateN(i);
+
+                error_Original += gtCoord.distance(pCoord);
+                error_IndoorFilter += gtCoord.distance(ifCoord);
+            }
+            result.append("==Average Error==\n");
+            result.append("Number of Points: " + trajectory.getNumPoints() + "\n");
+            result.append("Original: " + error_Original/trajectory.getNumPoints() + "\n");
+            result.append("Indoor Filter: " + error_IndoorFilter/trajectory.getNumPoints() + "\n");
+        }
+        result.append("==End==\n");
+
+        String originalText = textPaneOriginal.getText();
+        textPaneOriginal.setText(originalText + result.toString());
+    }
+
+    void evaluateIndoorMapMatching(JTextPane textPaneOriginal) {
+        StringBuilder result = new StringBuilder();
         if(indoorFeatures != null && trajectory != null) {
             DirectIndoorMapMatching dimm = new DirectIndoorMapMatching(indoorFeatures);
             HMMIndoorMapMatching himm = new HMMIndoorMapMatching(indoorFeatures);
-            System.out.println("==original trajectory==");
-            System.out.println("==DIMM==");
-            printMapMatchingResult(dimm.getMapMatchingResult(trajectory));
-            System.out.println("==HIMM==");
-            printMapMatchingResult(himm.getMapMatchingResult(trajectory));
+            result.append("==original trajectory==\n");
+            result.append("==DIMM==\n");
+            printMapMatchingResults(result, dimm.getMapMatchingResult(trajectory));
+            result.append("==HIMM==\n");
+            printMapMatchingResults(result, himm.getMapMatchingResult(trajectory));
 
-            if(trajectory.getLength() > MAX_DISTANCE) {
-                LineString lineWithMaxIndoorDistance = null;
-                try {
-                    lineWithMaxIndoorDistance = IndoorUtils.applyIndoorDistanceFilter(trajectory, MAX_DISTANCE, indoorFeatures.getCellSpaces());
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-                System.out.println("==Indoor distance filtered trajectory==");
-                System.out.println("==DIMM==");
-                printMapMatchingResult(dimm.getMapMatchingResult(lineWithMaxIndoorDistance));
-                System.out.println("==HIMM==");
-                printMapMatchingResult(himm.getMapMatchingResult(lineWithMaxIndoorDistance));
+            LineString lineWithMaxIndoorDistance = null;
+            try {
+                lineWithMaxIndoorDistance = IndoorUtils.applyIndoorDistanceFilter(trajectory, MAX_DISTANCE, indoorFeatures.getCellSpaces());
+                trajectory_IF = lineWithMaxIndoorDistance;
+            } catch (Exception e) {
+                e.printStackTrace();
             }
+            result.append("==Indoor distance filtered trajectory==\n");
+            result.append("==DIMM==\n");
+            System.out.print("==Indoor distance filtered trajectory==\n");
+            printMapMatchingResults(result, dimm.getMapMatchingResult(trajectory_IF));
+            System.out.print("==end==\n");
+            result.append("==HIMM==\n");
+            printMapMatchingResults(result, himm.getMapMatchingResult(trajectory_IF));
+            textPaneOriginal.setText(result.toString());
+
+            //System.out.println(result);
+            for(int i = 0; i < trajectory.getNumPoints(); i++){
+                Coordinate coord = trajectory.getCoordinateN(i);
+                Coordinate coord_IF = trajectory_IF.getCoordinateN(i);
+                System.out.printf("%d th point\n", i);
+                System.out.printf("Point Coord (%f,%f) : %s\n", coord.x, coord.y, dimm.getMapMatchingResult(trajectory)[i]);
+                System.out.printf("IF Point Coord (%f,%f) : %s\n", coord_IF.x, coord_IF.y, dimm.getMapMatchingResult(trajectory_IF)[i]);
+                System.out.println();
+            }
+
+        }
+    }
+
+    private void printMapMatchingResults(StringBuilder result, String[] mapMatchingResult) {
+        // TODO: 사실 mapMatchingResult 배열의 크기와 trajectory의 개수가 다를수 있지만...동일하게 취급(결과 정리의 편의를 위해)
+        for(int i = 0; i < trajectory.getNumPoints(); i++){
+            result.append(mapMatchingResult[i] + "\n");
         }
     }
 
@@ -193,8 +251,15 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         }
         if(trajectory != null) {
             drawArrowLines(g2, trajectory.getCoordinates(), Color.GREEN);
+            if(trajectory_IF != null) {
+                drawArrowLines(g2, trajectory_IF.getCoordinates(), Color.BLUE);
+            }
+            if(trajectory_GT != null) {
+                drawArrowLines(g2, trajectory_GT.getCoordinates(), Color.RED);
+            }
             System.out.println("original trajectory N : " + trajectory.getNumPoints());
 
+            /*
             // TODO : Remove it(Temporary case)
             if(trajectory.getLength() > MAX_DISTANCE) {
                 LineString lineWithMaxIndoorDistance = null;
@@ -206,6 +271,7 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
                 drawArrowLines(g2, lineWithMaxIndoorDistance.getCoordinates(), Color.RED);
                 System.out.println("corrected trajectory N : " + lineWithMaxIndoorDistance.getNumPoints());
             }
+            */
         }
         if(drawingCellCoords != null) {
             if(drawingCellCoords.length == 1) {

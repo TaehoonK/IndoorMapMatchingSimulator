@@ -82,10 +82,6 @@ public class IndoorUtils {
                     endPCellIndex = cellIndex;
                 }
             }
-
-            if(startPCellIndex != -1 && endPCellIndex != -1) {
-                break;
-            }
             cellIndex++;
         }
 
@@ -393,6 +389,7 @@ public class IndoorUtils {
                 startP = trajectory.getCoordinateN(i);
                 trajectoryCoordinates = new Coordinate[] {startP, endP};
                 trajectorySegment = gf.createLineString(trajectoryCoordinates);
+                trajectorySegment = getIndoorRoute(trajectorySegment, cellSpaces);
             }
             else {
                 startP = correctedCoordinate;

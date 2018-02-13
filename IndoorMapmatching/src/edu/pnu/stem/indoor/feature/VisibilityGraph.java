@@ -13,7 +13,10 @@ import java.util.ArrayList;
 import java.util.Iterator;
 
 /**
+ *
+ *
  * Created by STEM_KTH on 2017-05-23.
+ * @author Taehoon Kim, Pusan National University, STEM Lab.
  */
 public class VisibilityGraph {
     private static VisibilityGraph baseGraph = null;
@@ -26,6 +29,10 @@ public class VisibilityGraph {
         this.gf = new GeometryFactory();
     }
 
+    /**
+     *
+     * @return
+     * */
     public static VisibilityGraph getBaseGraph() {
         VisibilityGraph cloneGraph = null;
         if(baseGraph != null) {
@@ -36,6 +43,10 @@ public class VisibilityGraph {
         return cloneGraph;
     }
 
+    /**
+     *
+     * @param edges
+     * */
     public static void setBaseGraph(ArrayList<LineString> edges) {
         baseGraph = new VisibilityGraph();
         baseGraph.addEdges(edges);
@@ -69,6 +80,9 @@ public class VisibilityGraph {
         LineString resultPath = null;
 
         if(coords.length == 2) {
+            if(coords[0].equals(coords[1])) {
+                return gf.createLineString(coords);
+            }
             Node source = getNode(coords[0]);
             Node target = getNode(coords[1]);
 
@@ -139,7 +153,6 @@ public class VisibilityGraph {
     }
 
     /**
-     *
      *
      * @return
      * */

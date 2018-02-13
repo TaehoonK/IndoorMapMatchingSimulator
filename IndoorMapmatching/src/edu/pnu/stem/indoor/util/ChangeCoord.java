@@ -7,7 +7,7 @@ import com.vividsolutions.jts.geom.Coordinate;
  * @author Taehoon Kim, Pusan National University, STEM Lab.
  */
 public class ChangeCoord {
-    final static double CANVAS_MULTIPLE = 20;
+    public final static double CANVAS_MULTIPLE = 30;
     private final static double EARTH_RADIUS_KM = 6378.1370d;
     private static Coordinate min_position = new Coordinate(0,0);
     private static Coordinate max_position = new Coordinate(1000,1000);
