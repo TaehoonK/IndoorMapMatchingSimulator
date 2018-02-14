@@ -11,12 +11,17 @@ import edu.pnu.stem.indoor.util.SyntheticTrajectoryGenerator;
 import edu.pnu.stem.indoor.util.TimeTableElement;
 import edu.pnu.stem.indoor.util.mapmatching.DirectIndoorMapMatching;
 import edu.pnu.stem.indoor.util.mapmatching.HMMIndoorMapMatching;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
+import java.io.FileOutputStream;
 import java.util.ArrayList;
 import java.util.Random;
 
@@ -48,7 +53,8 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
     private Coordinate trajectoryCoords = null;
     private ArrayList<LineString> relatedVisibilityEdge = null;
     private ArrayList<LineString> relatedD2DEdge = null;
-
+    private ArrayList<Polygon> circleBufferArray = null;
+    
     int mousePositionX;
     int mousePositionY;
 
@@ -57,6 +63,7 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         indoorFeatures = new IndoorFeatures(gf);
         relatedVisibilityEdge = new ArrayList<>();
         relatedD2DEdge = new ArrayList<>();
+        circleBufferArray = new ArrayList<>();
         this.addMouseListener(this);
         this.addMouseMotionListener(this);
         this.addMouseWheelListener(this);
@@ -79,13 +86,74 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
     }
 
     void setTrajectory_IF(LineString indoorFilteredTrajectory) {
-        this.trajectory_IF = indoorFilteredTrajectory;
+        trajectory_IF = indoorFilteredTrajectory;
         repaint();
     }
 
     void setTrajectory_GT(LineString groundTruthTrajectory) {
-        this.trajectory_GT = groundTruthTrajectory;
+        trajectory_GT = groundTruthTrajectory;
         repaint();
+    }
+
+    void evaluateIndoorMapMatching(JTextPane textPaneOriginal) {
+        StringBuilder result = new StringBuilder();
+        if(indoorFeatures != null && trajectory != null) {
+            DirectIndoorMapMatching dimm = new DirectIndoorMapMatching(indoorFeatures);
+            HMMIndoorMapMatching himm = new HMMIndoorMapMatching(indoorFeatures);
+            result.append("==original trajectory==\n");
+            result.append("==DIMM==\n");
+            printMapMatchingResults(result, dimm.getMapMatchingResult(trajectory));
+            result.append("==HIMM==\n");
+            himm.makeAMatrixOnlyTopology();
+            //himm.makeBMatrixCellBuffer(ChangeCoord.CANVAS_MULTIPLE);
+            //printMapMatchingResults(result, himm.getMapMatchingResult(trajectory));
+            String[] mapMatchingResults = getResultFromHIMMwithCircleBuffer(himm, trajectory, ChangeCoord.CANVAS_MULTIPLE);
+            printMapMatchingResults(result, mapMatchingResults);
+
+
+            // TODO: Delete this code
+            // For visualize circle buffer for original trajectory
+            /*
+            for(Geometry geometry : himm.rawCircleBufferGeometries) {
+                if(geometry instanceof Polygon)
+                    circleBufferArray.add((Polygon)geometry);
+                else if(geometry instanceof MultiPolygon) {
+                    MultiPolygon multiPolygon = (MultiPolygon) geometry;
+                    // ??
+                }
+            }
+            */
+            LineString lineWithMaxIndoorDistance = null;
+            try {
+                lineWithMaxIndoorDistance = IndoorUtils.applyIndoorDistanceFilter(trajectory, MAX_DISTANCE, indoorFeatures.getCellSpaces());
+                setTrajectory_IF(lineWithMaxIndoorDistance);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            result.append("==Indoor distance filtered trajectory==\n");
+            result.append("==DIMM==\n");
+            System.out.print("==Indoor distance filtered trajectory==\n");
+            printMapMatchingResults(result, dimm.getMapMatchingResult(trajectory_IF));
+            System.out.print("==end==\n");
+            result.append("==HIMM==\n");
+            himm.makeAMatrixOnlyTopology();
+            //himm.makeBMatrixCellBuffer(ChangeCoord.CANVAS_MULTIPLE);
+            //printMapMatchingResults(result, himm.getMapMatchingResult(trajectory_IF));
+            mapMatchingResults = getResultFromHIMMwithCircleBuffer(himm, trajectory_IF, ChangeCoord.CANVAS_MULTIPLE);
+            printMapMatchingResults(result, mapMatchingResults);
+
+            textPaneOriginal.setText(result.toString());
+
+            //System.out.println(result);
+            for(int i = 0; i < trajectory.getNumPoints(); i++){
+                Coordinate coord = trajectory.getCoordinateN(i);
+                Coordinate coord_IF = trajectory_IF.getCoordinateN(i);
+                System.out.printf("%d th point\n", i);
+                System.out.printf("Point Coord (%f,%f) : %s\n", coord.x, coord.y, dimm.getMapMatchingResult(trajectory)[i]);
+                System.out.printf("IF Point Coord (%f,%f) : %s\n", coord_IF.x, coord_IF.y, dimm.getMapMatchingResult(trajectory_IF)[i]);
+                System.out.println();
+            }
+        }
     }
 
     void getGroundTruthResult(JTextPane textPaneOriginal) {
@@ -118,58 +186,265 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         textPaneOriginal.setText(originalText + result.toString());
     }
 
-    void evaluateIndoorMapMatching(JTextPane textPaneOriginal) {
-        StringBuilder result = new StringBuilder();
-        if(indoorFeatures != null && trajectory != null) {
-            DirectIndoorMapMatching dimm = new DirectIndoorMapMatching(indoorFeatures);
-            HMMIndoorMapMatching himm = new HMMIndoorMapMatching(indoorFeatures);
-            result.append("==original trajectory==\n");
-            result.append("==DIMM==\n");
-            printMapMatchingResults(result, dimm.getMapMatchingResult(trajectory));
-            result.append("==HIMM==\n");
-            printMapMatchingResults(result, himm.getMapMatchingResult(trajectory));
-
-            LineString lineWithMaxIndoorDistance = null;
-            try {
-                lineWithMaxIndoorDistance = IndoorUtils.applyIndoorDistanceFilter(trajectory, MAX_DISTANCE, indoorFeatures.getCellSpaces());
-                trajectory_IF = lineWithMaxIndoorDistance;
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-            result.append("==Indoor distance filtered trajectory==\n");
-            result.append("==DIMM==\n");
-            System.out.print("==Indoor distance filtered trajectory==\n");
-            printMapMatchingResults(result, dimm.getMapMatchingResult(trajectory_IF));
-            System.out.print("==end==\n");
-            result.append("==HIMM==\n");
-            printMapMatchingResults(result, himm.getMapMatchingResult(trajectory_IF));
-            textPaneOriginal.setText(result.toString());
-
-            //System.out.println(result);
-            for(int i = 0; i < trajectory.getNumPoints(); i++){
-                Coordinate coord = trajectory.getCoordinateN(i);
-                Coordinate coord_IF = trajectory_IF.getCoordinateN(i);
-                System.out.printf("%d th point\n", i);
-                System.out.printf("Point Coord (%f,%f) : %s\n", coord.x, coord.y, dimm.getMapMatchingResult(trajectory)[i]);
-                System.out.printf("IF Point Coord (%f,%f) : %s\n", coord_IF.x, coord_IF.y, dimm.getMapMatchingResult(trajectory_IF)[i]);
-                System.out.println();
-            }
-
-        }
-    }
-
     private void printMapMatchingResults(StringBuilder result, String[] mapMatchingResult) {
         // TODO: 사실 mapMatchingResult 배열의 크기와 trajectory의 개수가 다를수 있지만...동일하게 취급(결과 정리의 편의를 위해)
-        for(int i = 0; i < trajectory.getNumPoints(); i++){
-            result.append(mapMatchingResult[i] + "\n");
+        if(mapMatchingResult != null) {
+            for(int i = 0; i < trajectory.getNumPoints(); i++){
+                result.append(mapMatchingResult[i] + "\n");
+            }
         }
     }
 
     private void printMapMatchingResult(String[] mapMatchingResult) {
+        if(mapMatchingResult != null) {
+            for(int i = 0; i < trajectory.getNumPoints(); i++){
+                Coordinate coord = trajectory.getCoordinateN(i);
+                //System.out.printf("Point Coord (%f,%f) : %s\n", coord.x, coord.y, mapMatchingResult[i]);
+                System.out.printf("%s\n", mapMatchingResult[i]);
+            }
+        }
+    }
+
+    void evaluateSIMM_Excel(String fileID) {
+        final int BUFFER_REPETITION = 5;
+        Workbook workbook = new XSSFWorkbook();
+        if(indoorFeatures != null && trajectory != null) {
+            DirectIndoorMapMatching dimm = new DirectIndoorMapMatching(indoorFeatures);
+            HMMIndoorMapMatching himm = new HMMIndoorMapMatching(indoorFeatures);
+            Sheet resultSheet = workbook.createSheet("Result");
+
+            // Make SIMM result from original trajectory
+            Row resultSheetRow = resultSheet.createRow(0);
+            resultSheetRow.createCell(0).setCellValue("original trajectory");
+            getEvaluateResults(BUFFER_REPETITION, dimm, himm, trajectory, resultSheet);
+            System.out.println("original trajectory end");
+
+            // Make SIMM result from indoor distance filtered trajectory
+            LineString lineWithMaxIndoorDistance;
+            try {
+                lineWithMaxIndoorDistance = IndoorUtils.applyIndoorDistanceFilter(trajectory, MAX_DISTANCE, indoorFeatures.getCellSpaces());
+                setTrajectory_IF(lineWithMaxIndoorDistance);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            resultSheetRow = resultSheet.createRow(resultSheet.getLastRowNum() + 1);
+            resultSheetRow.createCell(0).setCellValue("Indoor distance filtered trajectory");
+            getEvaluateResults(BUFFER_REPETITION, dimm, himm, trajectory_IF, resultSheet);
+            System.out.println("Indoor distance filtered trajectory end");
+
+            // Make ground truth result using DIMM and evaluate all result
+            getGroundTruthResult_Excel(workbook);
+
+            // Write all result in a excel file
+            FileOutputStream outFile;
+            try {
+                outFile = new FileOutputStream("Result_" + fileID + ".xlsx");
+                workbook.write(outFile);
+                outFile.close();
+                System.out.println("Result_" + fileID + " write complete");
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private void getEvaluateResults(int BUFFER_REPETITION, DirectIndoorMapMatching dimm, HMMIndoorMapMatching himm, LineString trajectory, Sheet sheet) {
+        Row row;
+        row = sheet.createRow(sheet.getLastRowNum() + 1);
+        row.createCell(0).setCellValue("DIMM");
         for(int i = 0; i < trajectory.getNumPoints(); i++){
-            Coordinate coord = trajectory.getCoordinateN(i);
-            //System.out.printf("Point Coord (%f,%f) : %s\n", coord.x, coord.y, mapMatchingResult[i]);
-            System.out.printf("%s\n", mapMatchingResult[i]);
+            row.createCell(i+1).setCellValue(dimm.getMapMatchingResult(trajectory)[i]);
+        }
+
+        // A matrix : based on topology graph
+        // B matrix : based on Cell buffer
+        row = sheet.createRow(sheet.getLastRowNum() + 1);
+        row.createCell(0).setCellValue("HIMM, A matrix : Topology graph / B matrix : Cell buffer");
+        himm.makeAMatrixOnlyTopology();
+        double radius = 0.5;
+        for(int i = 0; i < BUFFER_REPETITION; i++) {
+            himm.makeBMatrixCellBuffer(ChangeCoord.CANVAS_MULTIPLE * radius);
+            row = sheet.createRow(sheet.getLastRowNum() + 1);
+            row.createCell(0).setCellValue("Radius(m): " + radius);
+
+            String[] mapMatchingResults = himm.getMapMatchingResult(trajectory);
+            if(mapMatchingResults != null) {
+                for(int j = 0; j < trajectory.getNumPoints(); j++){
+                    row.createCell(j+1).setCellValue(mapMatchingResults[j]);
+                }
+            }
+            else {
+                row.createCell(1).setCellValue("Impossible");
+            }
+            radius += 0.5;
+        }
+        System.out.println("HIMM, A matrix : Topology graph / B matrix : Cell buffer end");
+
+        // A matrix : based on static P
+        // B matrix : based on Cell buffer
+        row = sheet.createRow(sheet.getLastRowNum() + 1);
+        row.createCell(0).setCellValue("HIMM, A matrix : Static P / B matrix : Cell buffer");
+
+        for(double i = 0.1; i < 1; i += 0.2) {
+            himm.makeAMatrixByStaticP(i);
+            radius = 0.5;
+            for(int j = 0; j < BUFFER_REPETITION; j++) {
+                himm.makeBMatrixCellBuffer(ChangeCoord.CANVAS_MULTIPLE * radius);
+                row = sheet.createRow(sheet.getLastRowNum() + 1);
+                row.createCell(0).setCellValue("P: " + i + " / Radius(m): " + radius);
+
+                String[] mapMatchingResults = himm.getMapMatchingResult(trajectory);
+                if(mapMatchingResults != null) {
+                    for(int k = 0; k < trajectory.getNumPoints(); k++){
+                        row.createCell(k+1).setCellValue(mapMatchingResults[k]);
+                    }
+                }
+                else {
+                    row.createCell(1).setCellValue("Impossible");
+                }
+                radius += 0.5;
+            }
+        }
+        System.out.println("HIMM, A matrix : Static P / B matrix : Cell buffer end");
+
+        // A matrix : based on topology graph
+        // B matrix : based on circle buffer
+        row = sheet.createRow(sheet.getLastRowNum() + 1);
+        row.createCell(0).setCellValue("HIMM, A matrix : Topology graph / B matrix : Circle buffer");
+        radius = 0.5;
+        himm.makeAMatrixOnlyTopology();
+        for(int i = 0; i < BUFFER_REPETITION; i++) {
+            row = sheet.createRow(sheet.getLastRowNum() + 1);
+            row.createCell(0).setCellValue("Radius(m): " + radius);
+            String[] mapMatchingResults = getResultFromHIMMwithCircleBuffer(himm, trajectory, ChangeCoord.CANVAS_MULTIPLE * radius);
+            if(mapMatchingResults != null) {
+                for(int j = 0; j < trajectory.getNumPoints(); j++){
+                    row.createCell(j+1).setCellValue(mapMatchingResults[j]);
+                }
+            }
+            else {
+                row.createCell(1).setCellValue("Impossible");
+            }
+            radius += 0.5;
+        }
+        System.out.println("HIMM, A matrix : Topology graph / B matrix : Circle buffer end");
+
+        // A matrix : based on static P
+        // B matrix : based on Cell buffer
+        row = sheet.createRow(sheet.getLastRowNum() + 1);
+        row.createCell(0).setCellValue("HIMM, A matrix : Static P / B matrix : Circle buffer");
+        for(double i = 0.1; i < 1; i += 0.2) {
+            radius = 0.5;
+            himm.makeAMatrixByStaticP(i);
+            for(int j = 0; j < BUFFER_REPETITION; j++) {
+                row = sheet.createRow(sheet.getLastRowNum() + 1);
+                row.createCell(0).setCellValue("P: " + i + " / Radius(m): " + radius);
+                String[] mapMatchingResults = getResultFromHIMMwithCircleBuffer(himm, trajectory, ChangeCoord.CANVAS_MULTIPLE * radius);
+                if(mapMatchingResults != null) {
+                    for(int k = 0; k < trajectory.getNumPoints(); k++){
+                        row.createCell(k+1).setCellValue(mapMatchingResults[k]);
+                    }
+                }
+                else {
+                    row.createCell(1).setCellValue("Impossible");
+                }
+                radius += 0.5;
+            }
+        }
+        System.out.println("HIMM, A matrix : Static P / B matrix : Circle buffer end");
+    }
+
+    private String[] getResultFromHIMMwithCircleBuffer(HMMIndoorMapMatching himm, LineString trajectory, double radius) {
+        String[] mapMatchingResults;
+        ArrayList<String> observationArrayList =  new ArrayList<>();
+        for(int i = 0; i < trajectory.getNumPoints(); i++) {
+            String[] observationLabelList = new String[observationArrayList.size()];
+            for(int j = 0; j < observationArrayList.size(); j++) {
+                observationLabelList[j] = observationArrayList.get(j);
+            }
+            himm.makeBmatrixCircleBuffer(trajectory.getCoordinateN(i), radius);
+            String mapMatchingResult = himm.getMapMatchingResult(trajectory.getPointN(i), observationLabelList);
+            if(mapMatchingResult.equals("Impossible")) {
+                return null;
+            }
+            observationArrayList.add(mapMatchingResult);
+        }
+        himm.clearOnlyBMatrix();
+        mapMatchingResults = new String[observationArrayList.size()];
+        for(int i = 0; i < observationArrayList.size(); i++) {
+            mapMatchingResults[i] = observationArrayList.get(i);
+        }
+        return mapMatchingResults;
+    }
+
+    private void getGroundTruthResult_Excel(Workbook workbook) {
+        Sheet resultSheet = workbook.getSheet("Result");
+        Sheet summarySheet = workbook.createSheet("Summary");
+
+        String[] groungTruthResult = null;
+        Row resultSheetRow = resultSheet.createRow(resultSheet.getLastRowNum() + 1);
+        resultSheetRow.createCell(0).setCellValue("Ground Truth");
+        if(indoorFeatures != null && trajectory_GT != null) {
+            DirectIndoorMapMatching dimm = new DirectIndoorMapMatching(indoorFeatures);
+            groungTruthResult = dimm.getMapMatchingResult(trajectory_GT);
+
+            for(int i = 0; i < trajectory.getNumPoints(); i++){
+                resultSheetRow.createCell(i+1).setCellValue(groungTruthResult[i]);
+            }
+        }
+
+        for(int i = 0; i < resultSheet.getLastRowNum(); i++) {
+            resultSheetRow = resultSheet.getRow(i);
+            if(resultSheetRow.getLastCellNum() != 1) {
+                Row summaryRow = summarySheet.createRow(i);
+                double countTrue = 0;
+                for(int j = 1; j < resultSheetRow.getLastCellNum(); j++) {
+                    if(resultSheetRow.getCell(j).getStringCellValue().equals(groungTruthResult[j-1])) {
+                        summaryRow.createCell(j).setCellValue("TRUE");
+                        countTrue++;
+                    }
+                    else {
+                        summaryRow.createCell(j).setCellValue("FALSE");
+                    }
+                }
+                double accuracy = countTrue/(resultSheetRow.getLastCellNum() - 1) * 100;
+                summaryRow.createCell(summaryRow.getLastCellNum()).setCellValue(accuracy);
+            }
+        }
+        // Calculate a average error between ground truth and positioning trajectory
+        if(trajectory != null && trajectory_IF != null && trajectory_GT != null) {
+            double error_Original = 0;
+            double error_IndoorFilter = 0;
+            for(int i = 0; i < trajectory.getNumPoints(); i++){
+                Coordinate gtCoord = trajectory_GT.getCoordinateN(i);
+                Coordinate pCoord = trajectory.getCoordinateN(i);
+                Coordinate ifCoord = trajectory_IF.getCoordinateN(i);
+
+                error_Original += gtCoord.distance(pCoord)/ChangeCoord.CANVAS_MULTIPLE;
+                error_IndoorFilter += gtCoord.distance(ifCoord)/ChangeCoord.CANVAS_MULTIPLE;
+            }
+            Row summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
+            summaryRow.createCell(0).setCellValue("Metric");
+            summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
+            summaryRow.createCell(0).setCellValue("Number of points:");
+            summaryRow.createCell(1).setCellValue(trajectory.getNumPoints());
+            summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
+            summaryRow.createCell(0).setCellValue("Length of original trajectory:");
+            summaryRow.createCell(1).setCellValue(trajectory.getLength());
+            summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
+            summaryRow.createCell(0).setCellValue("Length of indoor filtered trajectory:");
+            summaryRow.createCell(1).setCellValue(trajectory_IF.getLength());
+            summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
+            summaryRow.createCell(0).setCellValue("Length of ground truth trajectory:");
+            summaryRow.createCell(1).setCellValue(trajectory_GT.getLength());
+            summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
+            summaryRow.createCell(0).setCellValue("Average error");
+            summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
+            summaryRow.createCell(0).setCellValue("Original:");
+            summaryRow.createCell(1).setCellValue(error_Original/trajectory.getNumPoints());
+            summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
+            summaryRow.createCell(0).setCellValue("Indoor filtered:");
+            summaryRow.createCell(1).setCellValue(error_IndoorFilter/trajectory.getNumPoints());
         }
     }
 
@@ -250,17 +525,23 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
             }
         }
         if(trajectory != null) {
-            drawArrowLines(g2, trajectory.getCoordinates(), Color.GREEN);
+            drawArrowLines(g2, trajectory.getCoordinates(), trajectory.getNumPoints(), Color.GREEN);
             if(trajectory_IF != null) {
-                drawArrowLines(g2, trajectory_IF.getCoordinates(), Color.BLUE);
+                drawArrowLines(g2, trajectory_IF.getCoordinates(), trajectory.getNumPoints(), Color.BLUE);
             }
             if(trajectory_GT != null) {
-                drawArrowLines(g2, trajectory_GT.getCoordinates(), Color.RED);
+                drawArrowLines(g2, trajectory_GT.getCoordinates(), trajectory.getNumPoints(), Color.RED);
             }
             System.out.println("original trajectory N : " + trajectory.getNumPoints());
 
+
             /*
             // TODO : Remove it(Temporary case)
+            if(circleBufferArray.size() != 0) {
+                for(Polygon polygon : circleBufferArray)
+                    drawLines(g2, polygon.getExteriorRing().getCoordinates(), Color.GREEN, false);
+            }
+
             if(trajectory.getLength() > MAX_DISTANCE) {
                 LineString lineWithMaxIndoorDistance = null;
                 try {
@@ -312,9 +593,9 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         }
     }
 
-    private void drawArrowLines(Graphics2D g2, Coordinate[] coords, Color color) {
+    private void drawArrowLines(Graphics2D g2, Coordinate[] coords, int length, Color color) {
         if (coords.length > 1) {
-            for (int i = 0; i < coords.length - 1; i++) {
+            for (int i = 0; i < length - 1; i++) {
                 drawArrowLine(g2, coords[i], coords[i+1], color);
             }
         }

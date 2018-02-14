@@ -2,6 +2,7 @@ package edu.pnu.stem.indoor.feature;
 
 import com.vividsolutions.jts.geom.*;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 import edu.pnu.stem.indoor.util.IndoorUtils;
 
@@ -13,6 +14,7 @@ import edu.pnu.stem.indoor.util.IndoorUtils;
  */
 public class IndoorFeatures {
     private ArrayList<CellSpace> cellSpaces = null;
+    private HashMap<String, Integer> cellSpaceIndexMap = null;
     private boolean[][] topologyGraph = null;
     private GeometryFactory gf = null;
 
@@ -22,11 +24,24 @@ public class IndoorFeatures {
 
     public IndoorFeatures (GeometryFactory gf) {
         cellSpaces = new ArrayList<>();
+        cellSpaceIndexMap = new HashMap<>();
         this.gf = gf;
     }
 
     public void addCellSpace(CellSpace cellSpace) {
         cellSpaces.add(cellSpace);
+        if(cellSpace.getLabel() == null) {
+            System.out.println("This cell doesn't have a label");
+        }
+        else {
+            cellSpaceIndexMap.put(cellSpace.getLabel(), cellSpaces.indexOf(cellSpace));
+        }
+    }
+
+    public int getCellSpaceIndex(String label) {
+        if(label.equals("Impossible"))
+            return -1;
+        return cellSpaceIndexMap.get(label);
     }
 
     public ArrayList<CellSpace> getCellSpaces() {

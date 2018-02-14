@@ -399,7 +399,7 @@ public class IndoorUtils {
                 correctedCoordinate = null;
             }
 
-            if(trajectorySegment.getLength() > maxIndoorDistance) {
+            if(trajectorySegment != null && trajectorySegment.getLength() > maxIndoorDistance) {
                 try {
                     LineString correctedPath = getIndoorRoute(trajectorySegment, maxIndoorDistance);
                     correctedCoordinate = correctedPath.getEndPoint().getCoordinate();

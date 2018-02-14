@@ -52,9 +52,9 @@ public class DirectIndoorMapMatching implements IndoorMapMatching {
                 it is set to that value, otherwise it is decided as the first value
                 * */
                 dimmResult[i] = -1;
-                for (int aCandidateCellIndexArray : candidateCellIndexArray) {
-                    if (i > 0 && dimmResult[i - 1] == aCandidateCellIndexArray) {
-                        dimmResult[i] = aCandidateCellIndexArray;
+                for (int candidateCellIndex : candidateCellIndexArray) {
+                    if (i > 0 && dimmResult[i - 1] == candidateCellIndex) {
+                        dimmResult[i] = candidateCellIndex;
                         break;
                     }
                 }

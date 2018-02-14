@@ -15,25 +15,36 @@ import java.util.ArrayList;
  * @author Taehoon Kim, Pusan National University, STEM Lab.
  * */
 public class HMMIndoorMapMatching implements IndoorMapMatching {
-    private final double CIRCLE_SIZE = 10;
-    private final double BUFFER_LENGTH = 10;
+    private double circleSize = 10;
+    private double bufferLength = 10;
 
     private IndoorFeatures indoorFeatures;
     private DirectIndoorMapMatching dimm;
     private HiddenMarkovModel hmm;
-    private Geometry[] rawCircleBufferGeometries;
+    public Geometry[] rawCircleBufferGeometries;
 
     public HMMIndoorMapMatching(IndoorFeatures indoorFeatures){
         dimm = new DirectIndoorMapMatching(indoorFeatures);
         hmm = new HiddenMarkovModel(indoorFeatures.getCellSpaces().size());
-        for(int i = 0; i < indoorFeatures.getCellSpaces().size(); i++) {
+        rawCircleBufferGeometries = new Geometry[hmm.getNumOfState()];
+        for(int i = 0; i < rawCircleBufferGeometries.length; i++) {
             rawCircleBufferGeometries[i] = null;
         }
         setIndoorFeatures(indoorFeatures);
+    }
 
-        // Set variable of Hidden Markov Model
-        makeAMatrixOnlyTopology();
-        makeBMatrixCellBuffer(BUFFER_LENGTH);
+    public void clear() {
+        hmm.clear();
+        for(int i = 0; i < rawCircleBufferGeometries.length; i++) {
+            rawCircleBufferGeometries[i] = null;
+        }
+    }
+
+    public void clearOnlyBMatrix() {
+        hmm.clearOnlyBMatrix();
+        for(int i = 0; i < rawCircleBufferGeometries.length; i++) {
+            rawCircleBufferGeometries[i] = null;
+        }
     }
 
     /**
@@ -83,7 +94,8 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
      * @param bufferLength
      * */
     public void makeBMatrixCellBuffer(final double bufferLength) {
-        double[][] matrixB = hmm.getRawMatrixB();
+        this.bufferLength = bufferLength;
+        double[][] matrixB = hmm.getMatrixB();
 
         for(int i = 0; i < hmm.getNumOfState(); i++) {
             Geometry aGeom = indoorFeatures.getCellSpace(i).getGeom().buffer(bufferLength);
@@ -107,13 +119,14 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
 
     /**
      * TODO: Window Size에 대한 개념 추가 필요
-     * @param bufferLength
+     * @param radius
      * @param lastCoord
      * */
-    public void makeBmatrixCircleBuffer(final Coordinate lastCoord, final double bufferLength) {
-        double[][] matrixB = hmm.getRawMatrixB();
+    public void makeBmatrixCircleBuffer(final Coordinate lastCoord, final double radius) {
+        circleSize = radius;
+        double[][] matrixB = hmm.getMatrixB();
 
-        Polygon circleBuffer = createCircle(lastCoord, bufferLength);
+        Polygon circleBuffer = createCircle(lastCoord, circleSize);
         int[] i_list = indoorFeatures.getCellSpaceIndex(lastCoord);
         int i = i_list[0];
 
@@ -146,15 +159,11 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
         String[] mapMatchingResult = new String[trajectory.getNumPoints()];
         ArrayList<Integer> observationList = getRealTimeMapMatchingResult(trajectory);
 
-        int[] observations = new int[observationList.size()];
         for(int i = 0; i < observationList.size(); i++) {
-            observations[i] = observationList.get(i);
-        }
-
-        for(int i = 0; i < observations.length; i++) {
-            int cellSpaceIndex = observations[i];
+            int cellSpaceIndex = observationList.get(i);
             if(cellSpaceIndex == -1) {
                 mapMatchingResult[i] = "Impossible";
+                return null;
             }
             else{
                 mapMatchingResult[i] = indoorFeatures.getCellSpace(cellSpaceIndex).getLabel();
@@ -162,6 +171,62 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
         }
 
         return mapMatchingResult;
+    }
+
+    /**
+     * @param endPoint
+     * @param observationLabelList
+     * */
+    public String getMapMatchingResult(Point endPoint, String[] observationLabelList) {
+        String mapMatchingResult;
+        int[] observations = new int[observationLabelList.length + 1];
+        for(int i = 0; i < observationLabelList.length; i++) {
+            observations[i] = indoorFeatures.getCellSpaceIndex(observationLabelList[i]);
+        }
+        int cellSpaceIndex = realTimeMapMatching(endPoint, observations);
+
+        if(cellSpaceIndex == -1) {
+            mapMatchingResult = "Impossible";
+        }
+        else{
+            mapMatchingResult = indoorFeatures.getCellSpace(cellSpaceIndex).getLabel();
+        }
+
+        return mapMatchingResult;
+    }
+
+    /**
+     * @param endPoint
+     * @param observations
+     * */
+    private int realTimeMapMatching(Point endPoint, int[] observations) {
+        int selectedResult = -1;
+
+        if(observations.length == 1) {
+            selectedResult = indoorFeatures.getCellSpaceIndex(endPoint.getCoordinate())[0];
+            observations[0] = selectedResult;
+            hmm.setInitStateP(selectedResult);
+        }
+
+        // Generate a candidate set for the last positioning point
+        ArrayList<Integer> candidateSet = new ArrayList<>();
+        for(int i = 0; i < indoorFeatures.getCellSpaces().size(); i++) {
+            if(indoorFeatures.getCellSpace(i).getGeom().intersects(endPoint.buffer(bufferLength)))
+                candidateSet.add(i);
+        }
+
+        // Select a cell index from candidate set by property of HMM evaluate results
+        double maxProbability = 0;
+        for (Integer candidateCell_Index : candidateSet) {
+            observations[observations.length - 1] = candidateCell_Index;
+            double temporalProbability = hmm.evaluate(observations);
+            if (temporalProbability > maxProbability) {
+                maxProbability = temporalProbability;
+                selectedResult = candidateCell_Index;
+            }
+        }
+
+        return selectedResult;
     }
 
     /**
@@ -205,10 +270,11 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
         // Generate a candidate set for the last positioning point
         ArrayList<Integer> candidateSet = new ArrayList<>();
         for(int i = 0; i < indoorFeatures.getCellSpaces().size(); i++) {
-            if(indoorFeatures.getCellSpace(i).getGeom().intersects(tempTrajectory.getEndPoint().buffer(CIRCLE_SIZE)))
+            if(indoorFeatures.getCellSpace(i).getGeom().intersects(tempTrajectory.getEndPoint().buffer(bufferLength)))
                 candidateSet.add(i);
         }
 
+        // Select a cell index from candidate set by property of HMM evaluate results
         double maxProbability = 0;
         for (Integer candidateCell_Index : candidateSet) {
             observations[observations.length - 1] = candidateCell_Index;

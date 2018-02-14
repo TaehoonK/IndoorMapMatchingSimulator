@@ -13,16 +13,12 @@ public class HiddenMarkovModel {
     private double[][] matrixA;
     private double[][] matrixB;
 
-    private double[][] rawMatrixB;
-
     public HiddenMarkovModel(int stateNum) {
         numOfState = stateNum;
         numOfObservation = numOfState;
         initStateP = new int[numOfState];
         matrixA = new double[numOfState][numOfState];
         matrixB = new double[numOfState][numOfObservation];
-
-        rawMatrixB = new double[numOfState][numOfObservation];
     }
 
     public int getNumOfState() { return  numOfState; }
@@ -33,10 +29,6 @@ public class HiddenMarkovModel {
 
     public double[][] getMatrixB() {
         return matrixB;
-    }
-
-    public double[][] getRawMatrixB() {
-        return rawMatrixB;
     }
 
     public void setInitStateP(int initStateIndex) {
@@ -51,21 +43,23 @@ public class HiddenMarkovModel {
         this.matrixB = matrixB;
     }
 
-    public void setRawMatrixB(double[][] rawMatrixB) {
-        this.rawMatrixB = rawMatrixB;
-    }
-
     /**
      *
      * */
-    public void Clear(){
+    public void clear(){
         for(int i = 0; i < numOfState; i++) {
             initStateP[i] = 0;
             for(int j = 0; j < numOfState; j++) {
                 matrixA[i][j] = 0;
                 matrixB[i][j] = 0;
+            }
+        }
+    }
 
-                rawMatrixB[i][j] = 0;
+    public void clearOnlyBMatrix() {
+        for(int i = 0; i < numOfState; i++) {
+            for(int j = 0; j < numOfState; j++) {
+                matrixB[i][j] = 0;
             }
         }
     }

@@ -57,6 +57,9 @@ public class IndoorMapmatchingSim {
     private JTextPane textPaneOriginal;
     private JScrollPane jScrollPane;
 
+    private final String RAW_TR_PATH = "C:\\Users\\timeo\\IdeaProjects\\github\\vita-master\\export4\\raw trajectory\\2018_02_14_09_41_15";
+    private final String TR_PATH = "C:\\Users\\timeo\\IdeaProjects\\github\\vita-master\\export4\\indoor positioning data\\2018_02_14_09_56_14";
+
     private IndoorMapmatchingSim() {
         panelMain.setSize(1000,1000);
         gf = new GeometryFactory();
@@ -111,7 +114,7 @@ public class IndoorMapmatchingSim {
         buttonPathEvaluate.addActionListener(e -> ((CanvasPanel)panelCanvas).syntheticTrajectoryTest());
         buttonCreateHole.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.CREATE_HOLE);
         buttonGetGroundTruth.addActionListener(e -> {
-            JFileChooser fileChooser = new JFileChooser("C:\\Users\\timeo\\IdeaProjects\\github\\vita-master\\export3\\raw trajectory\\2018_02_13_10_06_02");
+            JFileChooser fileChooser = new JFileChooser(RAW_TR_PATH);
             FileNameExtensionFilter filter = new FileNameExtensionFilter("txt (*.txt)", "txt");
             fileChooser.setFileFilter(filter);
 
@@ -121,48 +124,42 @@ public class IndoorMapmatchingSim {
                 try {
                     System.out.println("File Name: " + file.getName());
                     ((CanvasPanel)panelCanvas).setTrajectory(getVITAData(file));
-                } catch (IOException e1) {
-                    e1.printStackTrace();
-                } catch (ParseException e1) {
+                } catch (IOException | ParseException e1) {
                     e1.printStackTrace();
                 }
             }
             ((CanvasPanel)panelCanvas).getGroundTruthResult(textPaneOriginal);
         });
         buttonGetCreateTrajectory.addActionListener(e -> {
-            JFileChooser fileChooser = new JFileChooser("C:\\Users\\timeo\\IdeaProjects\\github\\vita-master\\export3\\indoor positioning data\\2018_02_13_10_49_50");
+            JFileChooser fileChooser = new JFileChooser(TR_PATH);
             FileNameExtensionFilter filter = new FileNameExtensionFilter("txt (*.txt)", "txt");
             fileChooser.setFileFilter(filter);
 
-            String groundTruthFileName = "Dest_Traj_";
+            String fileID = "";
             int returnVal = fileChooser.showOpenDialog(panelMain);
             if (returnVal == JFileChooser.APPROVE_OPTION) {
                 File file = fileChooser.getSelectedFile();
                 try {
                     System.out.println("File Name: " + file.getName());
                     String[] fileName = file.getName().split("_");
-                    groundTruthFileName += fileName[fileName.length - 1];
+                    fileID = fileName[fileName.length - 1];
                     //getBuildNGoData(file);
                     ((CanvasPanel)panelCanvas).setTrajectory(getVITAData(file));
-                } catch (IOException e1) {
-                    e1.printStackTrace();
-                } catch (ParseException e1) {
+                } catch (IOException | ParseException e1) {
                     e1.printStackTrace();
                 }
             }
-            ((CanvasPanel)panelCanvas).evaluateIndoorMapMatching(textPaneOriginal);
 
-            String RAW_TR_PATH = "C:\\Users\\timeo\\IdeaProjects\\github\\vita-master\\export3\\raw trajectory\\2018_02_13_10_06_02\\";
-            File groundTruth = new File(RAW_TR_PATH + groundTruthFileName);
+            String groundTruthFileName = "Dest_Traj_";
+            File groundTruth = new File(RAW_TR_PATH +"\\"+ groundTruthFileName + fileID);
             try {
                 ((CanvasPanel)panelCanvas).setTrajectory_GT(getVITAData(groundTruth));
-            } catch (IOException e1) {
-                e1.printStackTrace();
-            } catch (ParseException e1) {
+            } catch (IOException | ParseException e1) {
                 e1.printStackTrace();
             }
-            ((CanvasPanel)panelCanvas).getGroundTruthResult(textPaneOriginal);
-            System.out.println(groundTruthFileName);
+            //((CanvasPanel)panelCanvas).evaluateIndoorMapMatching(textPaneOriginal);
+            //((CanvasPanel)panelCanvas).getGroundTruthResult(textPaneOriginal);
+            ((CanvasPanel)panelCanvas).evaluateSIMM_Excel(fileID);
         });
     }
 
@@ -495,6 +492,8 @@ public class IndoorMapmatchingSim {
             cellSpaces.add(cellSpace);
             if(partition.getName() != null)
                 cellSpace.setLabel(partition.getName());
+            else
+                cellSpace.setLabel(partition.getGlobalID());
 
             for(AccessPoint ap : partition.getAPs()) {
                 Line2D.Double doorGeom = ap.getLine2D();
