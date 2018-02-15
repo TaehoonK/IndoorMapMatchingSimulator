@@ -10,7 +10,6 @@ import org.geotools.graph.structure.Node;
 import org.geotools.graph.traverse.standard.DijkstraIterator;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 
 /**
  *

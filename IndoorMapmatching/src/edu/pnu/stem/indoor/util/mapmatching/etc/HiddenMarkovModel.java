@@ -114,6 +114,9 @@ public class HiddenMarkovModel {
                     sum += fwd[t-1][j] * matrixA[j][i];
                 }
                 fwd[t][i] = sum * p;
+                if(sum > 0 && p > 0 && sum == 0) {
+                    System.out.println("overflow!!");
+                }
             }
         }
         double probabilitySum = 0;

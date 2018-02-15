@@ -14,7 +14,7 @@ import java.util.HashSet;
  * @author Taehoon Kim, Pusan National University, STEM Lab.
  */
 public class IndoorUtils {
-    public static final int BUFFER_SIZE = 10;
+    public static final int BUFFER_SIZE = (int) ChangeCoord.CANVAS_MULTIPLE;
     public static final int EPSILON = 5;
     private static final GeometryFactory gf = new GeometryFactory();
 
@@ -91,7 +91,7 @@ public class IndoorUtils {
                 startPCellIndex = getCellSpaceIndexWithEpsilon(startP.getCoordinate(), cellSpaces);
                 startP = getNearestPoint(startP, cellSpaces.get(startPCellIndex).getGeom());
             }
-            else {
+            if(endPCellIndex == -1) {
                 endPCellIndex = getCellSpaceIndexWithEpsilon(endP.getCoordinate(), cellSpaces);
                 endP = getNearestPoint(endP, cellSpaces.get(endPCellIndex).getGeom());
             }
@@ -179,8 +179,18 @@ public class IndoorUtils {
             graph.addEdges(start2doorGraph);
             graph.addEdges(end2doorGraph);
             // Get point2point shortest path using door2door graph
-            Coordinate[] coords = new Coordinate[]{startP.getCoordinate(), endP.getCoordinate()};
-            resultIndoorPath = graph.getShortestRoute(coords);
+            if(end2doorGraph.isEmpty()) {
+                // In case: a cell that containing the end point is disconnected with a building
+                // So, make a point that intersect point between a original line and a cell boundary that containing the start point
+                LineString lineString = gf.createLineString(new Coordinate[]{startP.getCoordinate(), endP.getCoordinate()});
+                Geometry interectionP = lineString.intersection(cellSpaces.get(startPCellIndex).getGeom().getExteriorRing());
+                Coordinate newEndPointCoord = interectionP.getCoordinates()[0];
+                resultIndoorPath = gf.createLineString(new Coordinate[]{startP.getCoordinate(), newEndPointCoord});
+            }
+            else {
+                Coordinate[] coords = new Coordinate[]{startP.getCoordinate(), endP.getCoordinate()};
+                resultIndoorPath = graph.getShortestRoute(coords);
+            }
         }
         else {
             System.out.println("Impossible case: cell Index is same!");
@@ -270,7 +280,14 @@ public class IndoorUtils {
      * @return
      * */
     public static Integer getCellSpaceIndexWithEpsilon(Coordinate targetCoordinate, ArrayList<CellSpace> cellSpaces) {
-        return getCellSpaceIndexWithEpsilon(targetCoordinate, EPSILON, cellSpaces);
+        int epsilon = EPSILON;
+        int cellIndex = getCellSpaceIndexWithEpsilon(targetCoordinate, epsilon, cellSpaces);
+        while (cellIndex == -1 && epsilon < ChangeCoord.CANVAS_MULTIPLE) {
+            epsilon *= 2;
+            cellIndex = getCellSpaceIndexWithEpsilon(targetCoordinate, epsilon, cellSpaces);
+        }
+
+        return cellIndex;
     }
 
     /**

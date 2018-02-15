@@ -16,12 +16,16 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Line2D;
+import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Random;
 
@@ -43,6 +47,7 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
     EditStatus currentEditStatus = null;
 
     private int selectedCellIndex = -1;
+    private final String resultPath = "result\\";
 
     private GeometryFactory gf = null;
     private IndoorFeatures indoorFeatures = null;
@@ -54,7 +59,7 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
     private ArrayList<LineString> relatedVisibilityEdge = null;
     private ArrayList<LineString> relatedD2DEdge = null;
     private ArrayList<Polygon> circleBufferArray = null;
-    
+
     int mousePositionX;
     int mousePositionY;
 
@@ -105,9 +110,9 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
             printMapMatchingResults(result, dimm.getMapMatchingResult(trajectory));
             result.append("==HIMM==\n");
             himm.makeAMatrixOnlyTopology();
-            //himm.makeBMatrixCellBuffer(ChangeCoord.CANVAS_MULTIPLE);
-            //printMapMatchingResults(result, himm.getMapMatchingResult(trajectory));
-            String[] mapMatchingResults = getResultFromHIMMwithCircleBuffer(himm, trajectory, ChangeCoord.CANVAS_MULTIPLE);
+            himm.makeBMatrixCellBuffer(ChangeCoord.CANVAS_MULTIPLE);
+            String[] mapMatchingResults =himm.getMapMatchingResult(trajectory);
+            //String[] mapMatchingResults = getResultFromHIMMwithCircleBuffer(himm, trajectory, ChangeCoord.CANVAS_MULTIPLE);
             printMapMatchingResults(result, mapMatchingResults);
 
 
@@ -205,8 +210,9 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         }
     }
 
-    void evaluateSIMM_Excel(String fileID) {
+    ExperimentResult evaluateSIMM_Excel(String fileID, ArrayList<String> keyList) {
         final int BUFFER_REPETITION = 5;
+        ExperimentResult experimentResult = new ExperimentResult(fileID);
         Workbook workbook = new XSSFWorkbook();
         if(indoorFeatures != null && trajectory != null) {
             DirectIndoorMapMatching dimm = new DirectIndoorMapMatching(indoorFeatures);
@@ -233,12 +239,21 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
             System.out.println("Indoor distance filtered trajectory end");
 
             // Make ground truth result using DIMM and evaluate all result
-            getGroundTruthResult_Excel(workbook);
+            if(keyList.isEmpty())
+                experimentResult = getGroundTruthResult_Excel(workbook, experimentResult, keyList);
+            else
+                experimentResult = getGroundTruthResult_Excel(workbook, experimentResult, null);
+
+            // Check a directory is exist or not
+            File dir = new File(resultPath);
+            if(!dir.exists()){
+                dir.mkdirs();
+            }
 
             // Write all result in a excel file
             FileOutputStream outFile;
             try {
-                outFile = new FileOutputStream("Result_" + fileID + ".xlsx");
+                outFile = new FileOutputStream(resultPath + "Result_" + fileID + ".xlsx");
                 workbook.write(outFile);
                 outFile.close();
                 System.out.println("Result_" + fileID + " write complete");
@@ -246,6 +261,8 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
                 e.printStackTrace();
             }
         }
+
+        return experimentResult;
     }
 
     private void getEvaluateResults(int BUFFER_REPETITION, DirectIndoorMapMatching dimm, HMMIndoorMapMatching himm, LineString trajectory, Sheet sheet) {
@@ -377,9 +394,15 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         return mapMatchingResults;
     }
 
-    private void getGroundTruthResult_Excel(Workbook workbook) {
+    private ExperimentResult getGroundTruthResult_Excel(Workbook workbook, ExperimentResult er, ArrayList<String> keyList) {
         Sheet resultSheet = workbook.getSheet("Result");
         Sheet summarySheet = workbook.createSheet("Summary");
+
+        int numTrPoint = trajectory.getNumPoints();
+        er.numTrajectoryPoint = numTrPoint;
+        er.trajectoryLength[0] = trajectory.getLength() / ChangeCoord.CANVAS_MULTIPLE;
+        er.trajectoryLength[1] = trajectory_IF.getLength() / ChangeCoord.CANVAS_MULTIPLE;
+        er.trajectoryLength[2] = getSubLineString(trajectory_GT, numTrPoint).getLength() / ChangeCoord.CANVAS_MULTIPLE;
 
         String[] groungTruthResult = null;
         Row resultSheetRow = resultSheet.createRow(resultSheet.getLastRowNum() + 1);
@@ -388,11 +411,12 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
             DirectIndoorMapMatching dimm = new DirectIndoorMapMatching(indoorFeatures);
             groungTruthResult = dimm.getMapMatchingResult(trajectory_GT);
 
-            for(int i = 0; i < trajectory.getNumPoints(); i++){
+            for(int i = 0; i < numTrPoint; i++){
                 resultSheetRow.createCell(i+1).setCellValue(groungTruthResult[i]);
             }
         }
 
+        String bigClass = null, middleClass = null;
         for(int i = 0; i < resultSheet.getLastRowNum(); i++) {
             resultSheetRow = resultSheet.getRow(i);
             if(resultSheetRow.getLastCellNum() != 1) {
@@ -400,52 +424,93 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
                 double countTrue = 0;
                 for(int j = 1; j < resultSheetRow.getLastCellNum(); j++) {
                     if(resultSheetRow.getCell(j).getStringCellValue().equals(groungTruthResult[j-1])) {
-                        summaryRow.createCell(j).setCellValue("TRUE");
+                        summaryRow.createCell(j).setCellValue(true);
                         countTrue++;
                     }
                     else {
-                        summaryRow.createCell(j).setCellValue("FALSE");
+                        summaryRow.createCell(j).setCellValue(false);
                     }
                 }
-                double accuracy = countTrue/(resultSheetRow.getLastCellNum() - 1) * 100;
+                summaryRow.createCell(0).setCellValue(countTrue);
+                double accuracy = countTrue / (resultSheetRow.getLastCellNum() - 1) * 100;
                 summaryRow.createCell(summaryRow.getLastCellNum()).setCellValue(accuracy);
+
+                String key = bigClass + "_" + middleClass + "_" + resultSheetRow.getCell(0).getStringCellValue();
+                er.accuracy.put(key, accuracy);
+                er.trueCount.put(key, countTrue);
+                if(keyList != null)
+                    keyList.add(key);
+            }
+            else {
+                String className = resultSheetRow.getCell(0).getStringCellValue();
+                if(className.equals("original trajectory") || className.equals("Indoor distance filtered trajectory")){
+                    bigClass = className;
+                }
+                else {
+                    middleClass = className;
+                }
             }
         }
+
         // Calculate a average error between ground truth and positioning trajectory
         if(trajectory != null && trajectory_IF != null && trajectory_GT != null) {
-            double error_Original = 0;
-            double error_IndoorFilter = 0;
-            for(int i = 0; i < trajectory.getNumPoints(); i++){
+            double errorOriginal = 0, errorIndoorFilter = 0;
+            double errorOriginalArray[] = new double[numTrPoint];
+            double errorIndoorFilterArray[] = new double[numTrPoint];
+
+            for(int i = 0; i < numTrPoint; i++){
                 Coordinate gtCoord = trajectory_GT.getCoordinateN(i);
                 Coordinate pCoord = trajectory.getCoordinateN(i);
                 Coordinate ifCoord = trajectory_IF.getCoordinateN(i);
 
-                error_Original += gtCoord.distance(pCoord)/ChangeCoord.CANVAS_MULTIPLE;
-                error_IndoorFilter += gtCoord.distance(ifCoord)/ChangeCoord.CANVAS_MULTIPLE;
+                errorOriginalArray[i] = gtCoord.distance(pCoord)/ChangeCoord.CANVAS_MULTIPLE;
+                errorIndoorFilterArray[i] = gtCoord.distance(ifCoord)/ChangeCoord.CANVAS_MULTIPLE;
+                errorOriginal += errorOriginalArray[i];
+                errorIndoorFilter += errorIndoorFilterArray[i];
             }
+            er.averageError[0] = errorOriginal / numTrPoint;
+            er.averageError[1] = errorIndoorFilter / numTrPoint;
+
+            double varOriginalError = 0, varIndoorFilterError = 0;
+            for(int i = 0; i < trajectory.getNumPoints(); i++) {
+                varOriginalError += Math.pow(er.averageError[0] - errorOriginalArray[i], 2);
+                varIndoorFilterError += Math.pow(er.averageError[1] - errorIndoorFilterArray[i], 2);
+            }
+            er.varianceError[0] = varOriginalError / numTrPoint;
+            er.varianceError[1] = varIndoorFilterError / numTrPoint;
+
             Row summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
             summaryRow.createCell(0).setCellValue("Metric");
             summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
             summaryRow.createCell(0).setCellValue("Number of points:");
-            summaryRow.createCell(1).setCellValue(trajectory.getNumPoints());
+            summaryRow.createCell(1).setCellValue(er.numTrajectoryPoint);
             summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
             summaryRow.createCell(0).setCellValue("Length of original trajectory:");
-            summaryRow.createCell(1).setCellValue(trajectory.getLength());
+            summaryRow.createCell(1).setCellValue(er.trajectoryLength[0]);
             summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
             summaryRow.createCell(0).setCellValue("Length of indoor filtered trajectory:");
-            summaryRow.createCell(1).setCellValue(trajectory_IF.getLength());
+            summaryRow.createCell(1).setCellValue(er.trajectoryLength[1]);
             summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
             summaryRow.createCell(0).setCellValue("Length of ground truth trajectory:");
-            summaryRow.createCell(1).setCellValue(trajectory_GT.getLength());
+            summaryRow.createCell(1).setCellValue(er.trajectoryLength[2]);
             summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
             summaryRow.createCell(0).setCellValue("Average error");
             summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
             summaryRow.createCell(0).setCellValue("Original:");
-            summaryRow.createCell(1).setCellValue(error_Original/trajectory.getNumPoints());
+            summaryRow.createCell(1).setCellValue(er.averageError[0]);
             summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
             summaryRow.createCell(0).setCellValue("Indoor filtered:");
-            summaryRow.createCell(1).setCellValue(error_IndoorFilter/trajectory.getNumPoints());
+            summaryRow.createCell(1).setCellValue(er.averageError[1]);
+            summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
+            summaryRow.createCell(0).setCellValue("Variance error");
+            summaryRow.createCell(0).setCellValue("Original:");
+            summaryRow.createCell(1).setCellValue(er.varianceError[0]);
+            summaryRow = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
+            summaryRow.createCell(0).setCellValue("Indoor filtered:");
+            summaryRow.createCell(1).setCellValue(er.varianceError[1]);
         }
+
+        return er;
     }
 
     @Override
@@ -456,6 +521,7 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g2.setStroke(new BasicStroke(2));
         g2.setFont(new Font("Serif", Font.PLAIN, 20));
+
 
         /*
         // draw mouse point coordinate
@@ -767,16 +833,6 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         repaint();
     }
 
-    private Coordinate[] addCoordinate(Coordinate newCoord) {
-        int coordsNum = drawingCellCoords.length;
-        Coordinate[] realCellCoords = new Coordinate[coordsNum + 1];
-        for (int i = 0; i < coordsNum; i++) {
-            realCellCoords[i] = new Coordinate(drawingCellCoords[i].x, drawingCellCoords[i].y);
-        }
-        realCellCoords[coordsNum] = new Coordinate(newCoord.x, newCoord.y);
-        return realCellCoords;
-    }
-
     @Override
     public void mouseReleased(MouseEvent e) {
 
@@ -811,7 +867,31 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
 
     }
 
-    void syntheticTrajectoryTest() {
+    private Coordinate[] addCoordinate(Coordinate newCoord) {
+        int coordsNum = drawingCellCoords.length;
+        Coordinate[] realCellCoords = new Coordinate[coordsNum + 1];
+        for (int i = 0; i < coordsNum; i++) {
+            realCellCoords[i] = new Coordinate(drawingCellCoords[i].x, drawingCellCoords[i].y);
+        }
+        realCellCoords[coordsNum] = new Coordinate(newCoord.x, newCoord.y);
+        return realCellCoords;
+    }
+
+    private LineString getSubLineString(LineString lineString, int size) {
+        if(size > lineString.getNumPoints()) return  lineString;
+        else {
+            Coordinate[] originalCoords = lineString.getCoordinates();
+            Coordinate[] newCoords = new Coordinate[size];
+
+            for(int i = 0; i < size; i++) {
+                newCoords[i] = originalCoords[i];
+            }
+
+            return gf.createLineString(newCoords);
+        }
+    }
+
+    private void syntheticTrajectoryTest() {
         ArrayList<TimeTableElement> timeTableElements = new ArrayList<>();
         Random random = new Random();
         int timeTableElementsNum = 10;
@@ -829,5 +909,24 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         SyntheticTrajectoryGenerator generator = new SyntheticTrajectoryGenerator(indoorFeatures);
         trajectory = generator.generate(timeTableElements);
         repaint();
+    }
+
+    void saveImage(String fileID) {
+        BufferedImage image = new BufferedImage(getWidth(), getHeight(), BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2 = image.createGraphics();
+        paint(g2);
+
+        // Check a directory is exist or not
+        File dir = new File(resultPath);
+        if(!dir.exists()){
+            dir.mkdirs();
+        }
+
+        // Save CavasPanel as image
+        try {
+            ImageIO.write(image, "PNG", new File(resultPath + "screenshot_" + fileID + ".png"));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

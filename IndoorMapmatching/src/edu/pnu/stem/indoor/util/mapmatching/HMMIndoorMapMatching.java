@@ -242,6 +242,8 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
             LineString tempTrajectory = IndoorUtils.createLineString(coordinates);
             int observationResult = realTimeMapMatching(tempTrajectory, mapMatchingIndexList);
             mapMatchingIndexList.add(observationResult);
+            if(observationResult == -1)
+                break;
         }
 
         return mapMatchingIndexList;
@@ -269,8 +271,13 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
 
         // Generate a candidate set for the last positioning point
         ArrayList<Integer> candidateSet = new ArrayList<>();
+        double bufferRadius = tempTrajectory.getPointN(tempTrajectory.getNumPoints() - 2).distance(tempTrajectory.getEndPoint());
+        if(bufferRadius < bufferLength) {
+            bufferRadius = bufferLength;
+        }
+        Polygon circleBuffer = (Polygon) tempTrajectory.getEndPoint().buffer(bufferRadius);
         for(int i = 0; i < indoorFeatures.getCellSpaces().size(); i++) {
-            if(indoorFeatures.getCellSpace(i).getGeom().intersects(tempTrajectory.getEndPoint().buffer(bufferLength)))
+            if(indoorFeatures.getCellSpace(i).getGeom().intersects(circleBuffer))
                 candidateSet.add(i);
         }
 

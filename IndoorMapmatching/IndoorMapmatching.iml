@@ -20,8 +20,8 @@
         <jarDirectory url="file://$USER_HOME$/geotools-16.3" recursive="false" type="SOURCES" />
       </library>
     </orderEntry>
-    <orderEntry type="library" name="geotools-16" level="project" />
     <orderEntry type="library" name="Vita" level="project" />
     <orderEntry type="library" name="poi-3.17" level="project" />
+    <orderEntry type="library" name="gt-jts-wrapper-18.1" level="project" />
   </component>
 </module>

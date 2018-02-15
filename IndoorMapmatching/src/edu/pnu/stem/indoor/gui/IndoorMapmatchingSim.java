@@ -6,9 +6,14 @@ import cn.edu.zju.db.datagen.database.spatialobject.AccessPoint;
 import cn.edu.zju.db.datagen.database.spatialobject.Floor;
 import cn.edu.zju.db.datagen.database.spatialobject.Partition;
 import com.vividsolutions.jts.geom.*;
+import com.vividsolutions.jts.geom.Polygon;
 import diva.util.java2d.Polygon2D;
 import edu.pnu.stem.indoor.feature.CellSpace;
 import edu.pnu.stem.indoor.util.ChangeCoord;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -30,6 +35,7 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.regex.Pattern;
 
 /**
  * Created by STEM_KTH on 2017-05-17.
@@ -111,7 +117,115 @@ public class IndoorMapmatchingSim {
         buttonCreateCell.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.CREATE_CELLSPACE);
         buttonCreatePath.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.CREATE_TRAJECTORY);
         buttonSelectCell.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.SELECT_CELLSPACE);
-        buttonPathEvaluate.addActionListener(e -> ((CanvasPanel)panelCanvas).syntheticTrajectoryTest());
+        buttonPathEvaluate.addActionListener(e -> {
+            long startTime = System.currentTimeMillis();
+            File dir = new File(TR_PATH);
+            File[] fileList = dir.listFiles();
+            assert fileList != null;
+
+            int SAMPLE_NUMBER = 100;
+            if(SAMPLE_NUMBER > fileList.length) SAMPLE_NUMBER = fileList.length;
+            ExperimentResult[] experimentResults = new ExperimentResult[SAMPLE_NUMBER];
+            ArrayList<String> keyList = new ArrayList<>();
+            for(int i = 0 ; i < SAMPLE_NUMBER ; i++){
+                String fileID = "";
+                File file = fileList[i];
+                if(file.isFile()){
+                    System.out.println("\tFile Name = " + file.getName());
+                    String[] fileName = file.getName().split("_");
+                    fileID = fileName[fileName.length - 1].split(Pattern.quote("."))[0];
+                    try {
+                        LineString trajectory = getVITAData(file);
+                        if(trajectory.isEmpty()) {
+                            experimentResults[i] = null;
+                            continue;
+                        }
+                        ((CanvasPanel)panelCanvas).setTrajectory(trajectory);
+                    } catch (IOException | ParseException e1) {
+                        e1.printStackTrace();
+                        long endTime = System.currentTimeMillis();
+                        System.out.println("Running Time :" + (endTime - startTime)/1000.0 + "sec");
+                    }
+                }
+                String groundTruthFileName = "Dest_Traj_";
+                File groundTruth = new File(RAW_TR_PATH +"\\"+ groundTruthFileName + fileID + ".txt");
+                try {
+                    ((CanvasPanel)panelCanvas).setTrajectory_GT(getVITAData(groundTruth));
+                } catch (IOException | ParseException e1) {
+                    e1.printStackTrace();
+                    long endTime = System.currentTimeMillis();
+                    System.out.println("Running Time :" + (endTime - startTime)/1000.0 + "sec");
+                }
+                experimentResults[i] = ((CanvasPanel)panelCanvas).evaluateSIMM_Excel(fileID, keyList);
+                ((CanvasPanel)panelCanvas).saveImage(fileID);
+            }
+            // 최종 결과 출력
+            Workbook workbook = new XSSFWorkbook();
+            Sheet summarySheet = workbook.createSheet("Summary");
+            Row row = summarySheet.createRow(0);
+            if(experimentResults[0] != null) {
+                row.createCell(row.getLastCellNum()  + 1).setCellValue("ID");
+                for(String key : keyList) {
+                    row.createCell(row.getLastCellNum()).setCellValue("Accuracy: \n" + key);
+                }
+                for(String key : keyList) {
+                    row.createCell(row.getLastCellNum()).setCellValue("TRUE count: \n" + key);
+                }
+                row.createCell(row.getLastCellNum()).setCellValue("Point count");
+                row.createCell(row.getLastCellNum()).setCellValue("Trajectory Length\n Original");
+                row.createCell(row.getLastCellNum()).setCellValue("Trajectory Length\n Indoor Filtered");
+                row.createCell(row.getLastCellNum()).setCellValue("Trajectory Length\n GroundTruth");
+                row.createCell(row.getLastCellNum()).setCellValue("Average Error\n Original");
+                row.createCell(row.getLastCellNum()).setCellValue("Average Error\n Indoor Filtered");
+                row.createCell(row.getLastCellNum()).setCellValue("Variance Error\n Original");
+                row.createCell(row.getLastCellNum()).setCellValue("Variance Error\n Indoor Filtered");
+            }
+            for(ExperimentResult er : experimentResults) {
+                if(er != null) {
+                    row = summarySheet.createRow(summarySheet.getLastRowNum() + 1);
+                    row.createCell(row.getLastCellNum()  + 1).setCellValue(er.id);
+                    for(String key : keyList) {
+                        if(er.accuracy.containsKey(key)) {
+                            row.createCell(row.getLastCellNum()).setCellValue(er.accuracy.get(key));
+                        }
+                        else {
+                            row.createCell(row.getLastCellNum()).setCellValue("");
+                        }
+                    }
+                    for(String key : keyList) {
+                        if(er.trueCount.containsKey(key)) {
+                            row.createCell(row.getLastCellNum()).setCellValue(er.trueCount.get(key));
+                        }
+                        else {
+                            row.createCell(row.getLastCellNum()).setCellValue("");
+                        }
+                    }
+                    row.createCell(row.getLastCellNum()).setCellValue(er.numTrajectoryPoint);
+                    row.createCell(row.getLastCellNum()).setCellValue(er.trajectoryLength[0]);
+                    row.createCell(row.getLastCellNum()).setCellValue(er.trajectoryLength[1]);
+                    row.createCell(row.getLastCellNum()).setCellValue(er.trajectoryLength[2]);
+                    row.createCell(row.getLastCellNum()).setCellValue(er.averageError[0]);
+                    row.createCell(row.getLastCellNum()).setCellValue(er.averageError[1]);
+                    row.createCell(row.getLastCellNum()).setCellValue(er.varianceError[0]);
+                    row.createCell(row.getLastCellNum()).setCellValue(er.varianceError[1]);
+                }
+            }
+
+            // Write all result in a excel file
+            FileOutputStream outFile;
+            try {
+                outFile = new FileOutputStream("Result_Summary.xlsx");
+                workbook.write(outFile);
+                outFile.close();
+                System.out.println("Experiments is End!!");
+            } catch (Exception e1) {
+                e1.printStackTrace();
+                long endTime = System.currentTimeMillis();
+                System.out.println("Running Time :" + (endTime - startTime)/1000.0 + "sec");
+            }
+            long endTime = System.currentTimeMillis();
+            System.out.println("Running Time :" + (endTime - startTime)/1000.0 + "sec");
+        });
         buttonCreateHole.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.CREATE_HOLE);
         buttonGetGroundTruth.addActionListener(e -> {
             JFileChooser fileChooser = new JFileChooser(RAW_TR_PATH);
@@ -144,7 +258,12 @@ public class IndoorMapmatchingSim {
                     String[] fileName = file.getName().split("_");
                     fileID = fileName[fileName.length - 1];
                     //getBuildNGoData(file);
-                    ((CanvasPanel)panelCanvas).setTrajectory(getVITAData(file));
+                    LineString trajectory = getVITAData(file);
+                    if(trajectory.isEmpty())
+                        return;
+                    ((CanvasPanel)panelCanvas).setTrajectory(trajectory);
+                    //LineString lineWithMaxIndoorDistance = IndoorUtils.applyIndoorDistanceFilter(trajectory, ChangeCoord.CANVAS_MULTIPLE * 3, ((CanvasPanel)panelCanvas).getIndoorFeatures().getCellSpaces());
+                    //((CanvasPanel)panelCanvas).setTrajectory_IF(lineWithMaxIndoorDistance);
                 } catch (IOException | ParseException e1) {
                     e1.printStackTrace();
                 }
@@ -157,9 +276,10 @@ public class IndoorMapmatchingSim {
             } catch (IOException | ParseException e1) {
                 e1.printStackTrace();
             }
-            //((CanvasPanel)panelCanvas).evaluateIndoorMapMatching(textPaneOriginal);
+            ((CanvasPanel)panelCanvas).evaluateIndoorMapMatching(textPaneOriginal);
             //((CanvasPanel)panelCanvas).getGroundTruthResult(textPaneOriginal);
-            ((CanvasPanel)panelCanvas).evaluateSIMM_Excel(fileID);
+            //((CanvasPanel)panelCanvas).evaluateSIMM_Excel(fileID);
+            //((CanvasPanel)panelCanvas).saveImage(fileID);
         });
     }
 
@@ -253,12 +373,15 @@ public class IndoorMapmatchingSim {
             coordsInASec.clear();
         }
 
-        Coordinate[] trajectoryData = new Coordinate[coords.size()];
-        for(int i = 0; i < coords.size(); i++) {
-            trajectoryData[i] = coords.get(i);
+        if(coords.size() > 1) {
+            Coordinate[] trajectoryData = new Coordinate[coords.size()];
+            for(int i = 0; i < coords.size(); i++) {
+                trajectoryData[i] = coords.get(i);
+            }
+            return gf.createLineString(trajectoryData);
         }
-        LineString loadedTrajectory = gf.createLineString(trajectoryData);
-        return  loadedTrajectory;
+        else
+            return gf.createLineString(new Coordinate[]{});
     }
 
     private Coordinate getAverageCoordinate(ArrayList<Coordinate> coordsInASec) {
