@@ -10,6 +10,7 @@ import com.vividsolutions.jts.geom.Polygon;
 import diva.util.java2d.Polygon2D;
 import edu.pnu.stem.indoor.feature.CellSpace;
 import edu.pnu.stem.indoor.util.ChangeCoord;
+import edu.pnu.stem.indoor.util.IndoorUtils;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
@@ -25,6 +26,8 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.geom.Line2D;
 import java.awt.geom.Rectangle2D;
 import java.io.*;
@@ -56,15 +59,21 @@ public class IndoorMapmatchingSim {
     private JButton buttonCreateDoor;
     private JButton buttonGetPreparedInfo;
     private JButton buttonCreateHole;
-    private JButton buttonGetGroundTruth;
+    private JButton buttonGetTR_nextOne;
     private JButton buttonGetOSMData;
     private JButton buttonGetCreateTrajectory;
     private JButton buttonGetIFCData;
     private JTextPane textPaneOriginal;
     private JScrollPane jScrollPane;
+    private JButton buttonGetTR_prevOne;
 
     private final String RAW_TR_PATH = "C:\\Users\\timeo\\IdeaProjects\\github\\vita-master\\export4\\raw trajectory\\2018_02_14_09_41_15";
     private final String TR_PATH = "C:\\Users\\timeo\\IdeaProjects\\github\\vita-master\\export4\\indoor positioning data\\2018_02_14_09_56_14";
+
+    private int trIndexView = 1;
+    private LineString trajectory = null;
+    private LineString trajectoryIF = null;
+    private LineString trajectoryGT = null;
 
     private IndoorMapmatchingSim() {
         panelMain.setSize(1000,1000);
@@ -123,7 +132,7 @@ public class IndoorMapmatchingSim {
             File[] fileList = dir.listFiles();
             assert fileList != null;
 
-            int SAMPLE_NUMBER = 100;
+            int SAMPLE_NUMBER = 1000;
             if(SAMPLE_NUMBER > fileList.length) SAMPLE_NUMBER = fileList.length;
             ExperimentResult[] experimentResults = new ExperimentResult[SAMPLE_NUMBER];
             ArrayList<String> keyList = new ArrayList<>();
@@ -134,9 +143,13 @@ public class IndoorMapmatchingSim {
                     System.out.println("\tFile Name = " + file.getName());
                     String[] fileName = file.getName().split("_");
                     fileID = fileName[fileName.length - 1].split(Pattern.quote("."))[0];
+
+                    // TODO: For debug, test this lambda function by specific case
+                    //if(!fileID.equals("161")) continue;
                     try {
                         LineString trajectory = getVITAData(file);
-                        if(trajectory.isEmpty()) {
+                        if(trajectory.isEmpty() || trajectory.getNumPoints() < 50) {
+                            System.out.println("Pass");
                             experimentResults[i] = null;
                             continue;
                         }
@@ -150,7 +163,13 @@ public class IndoorMapmatchingSim {
                 String groundTruthFileName = "Dest_Traj_";
                 File groundTruth = new File(RAW_TR_PATH +"\\"+ groundTruthFileName + fileID + ".txt");
                 try {
-                    ((CanvasPanel)panelCanvas).setTrajectory_GT(getVITAData(groundTruth));
+                    LineString trajectoryGT = getVITAData(groundTruth);
+                    if(trajectoryGT.isEmpty()) {
+                        System.out.println("Ground Truth is empty: Pass");
+                        experimentResults[i] = null;
+                        continue;
+                    }
+                    ((CanvasPanel)panelCanvas).setTrajectory_GT(trajectoryGT);
                 } catch (IOException | ParseException e1) {
                     e1.printStackTrace();
                     long endTime = System.currentTimeMillis();
@@ -227,23 +246,6 @@ public class IndoorMapmatchingSim {
             System.out.println("Running Time :" + (endTime - startTime)/1000.0 + "sec");
         });
         buttonCreateHole.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.CREATE_HOLE);
-        buttonGetGroundTruth.addActionListener(e -> {
-            JFileChooser fileChooser = new JFileChooser(RAW_TR_PATH);
-            FileNameExtensionFilter filter = new FileNameExtensionFilter("txt (*.txt)", "txt");
-            fileChooser.setFileFilter(filter);
-
-            int returnVal = fileChooser.showOpenDialog(panelMain);
-            if (returnVal == JFileChooser.APPROVE_OPTION) {
-                File file = fileChooser.getSelectedFile();
-                try {
-                    System.out.println("File Name: " + file.getName());
-                    ((CanvasPanel)panelCanvas).setTrajectory(getVITAData(file));
-                } catch (IOException | ParseException e1) {
-                    e1.printStackTrace();
-                }
-            }
-            ((CanvasPanel)panelCanvas).getGroundTruthResult(textPaneOriginal);
-        });
         buttonGetCreateTrajectory.addActionListener(e -> {
             JFileChooser fileChooser = new JFileChooser(TR_PATH);
             FileNameExtensionFilter filter = new FileNameExtensionFilter("txt (*.txt)", "txt");
@@ -262,8 +264,8 @@ public class IndoorMapmatchingSim {
                     if(trajectory.isEmpty())
                         return;
                     ((CanvasPanel)panelCanvas).setTrajectory(trajectory);
-                    //LineString lineWithMaxIndoorDistance = IndoorUtils.applyIndoorDistanceFilter(trajectory, ChangeCoord.CANVAS_MULTIPLE * 3, ((CanvasPanel)panelCanvas).getIndoorFeatures().getCellSpaces());
-                    //((CanvasPanel)panelCanvas).setTrajectory_IF(lineWithMaxIndoorDistance);
+                    LineString lineWithMaxIndoorDistance = IndoorUtils.applyIndoorDistanceFilter(trajectory, ChangeCoord.CANVAS_MULTIPLE * 3, ((CanvasPanel)panelCanvas).getIndoorFeatures().getCellSpaces());
+                    ((CanvasPanel)panelCanvas).setTrajectory_IF(lineWithMaxIndoorDistance);
                 } catch (IOException | ParseException e1) {
                     e1.printStackTrace();
                 }
@@ -277,9 +279,48 @@ public class IndoorMapmatchingSim {
                 e1.printStackTrace();
             }
             ((CanvasPanel)panelCanvas).evaluateIndoorMapMatching(textPaneOriginal);
-            //((CanvasPanel)panelCanvas).getGroundTruthResult(textPaneOriginal);
+            ((CanvasPanel)panelCanvas).getGroundTruthResult(textPaneOriginal);
             //((CanvasPanel)panelCanvas).evaluateSIMM_Excel(fileID);
             //((CanvasPanel)panelCanvas).saveImage(fileID);
+        });
+        buttonGetTR_nextOne.addActionListener(e -> {
+            if(trajectory != null && trajectoryIF != null && trajectoryGT != null) {
+                if(trajectory.getNumPoints() > trIndexView && trIndexView > 0) {
+                    trIndexView++;
+
+                    ((CanvasPanel)panelCanvas).setTrajectory((LineString) CanvasPanel.getSubLineString(trajectory, trIndexView));
+                    ((CanvasPanel)panelCanvas).setTrajectory_IF((LineString) CanvasPanel.getSubLineString(trajectoryIF, trIndexView));
+                    ((CanvasPanel)panelCanvas).setTrajectory_GT((LineString) CanvasPanel.getSubLineString(trajectoryGT, trIndexView));
+                }
+                else {
+                    trajectory = trajectoryIF = trajectoryGT = null;
+                    trIndexView = 1;
+                }
+            }
+            else {
+                trajectory = ((CanvasPanel)panelCanvas).getTrajectory();
+                trajectoryIF = ((CanvasPanel)panelCanvas).getTrajectory_IF();
+                trajectoryGT = ((CanvasPanel)panelCanvas).getTrajectory_GT();
+            }
+        });
+        buttonGetTR_prevOne.addActionListener(e -> {
+            if(trajectory != null && trajectoryIF != null && trajectoryGT != null) {
+                if(trajectory.getNumPoints() > trIndexView && trIndexView > 2) {
+                    trIndexView--;
+
+                    ((CanvasPanel)panelCanvas).setTrajectory((LineString) CanvasPanel.getSubLineString(trajectory, trIndexView));
+                    ((CanvasPanel)panelCanvas).setTrajectory_IF((LineString) CanvasPanel.getSubLineString(trajectoryIF, trIndexView));
+                    ((CanvasPanel)panelCanvas).setTrajectory_GT((LineString) CanvasPanel.getSubLineString(trajectoryGT, trIndexView));
+                }
+                else {
+                    trIndexView = 3;
+                }
+            }
+            else {
+                trajectory = ((CanvasPanel)panelCanvas).getTrajectory();
+                trajectoryIF = ((CanvasPanel)panelCanvas).getTrajectory_IF();
+                trajectoryGT = ((CanvasPanel)panelCanvas).getTrajectory_GT();
+            }
         });
     }
 
@@ -574,7 +615,7 @@ public class IndoorMapmatchingSim {
 
         Connection connection = DB_Connection.connectToDatabase("conf/moovework.properties");
         try {
-            DB_WrapperLoad.loadALL(connection, 3);
+            DB_WrapperLoad.loadALL(connection, 10);
             connection.close();
         } catch (SQLException e) {
             e.printStackTrace();
@@ -639,7 +680,7 @@ public class IndoorMapmatchingSim {
 
             }
             ((CanvasPanel)panelCanvas).addCellSpace(cellSpace);
-            ((CanvasPanel)panelCanvas).floorId = floor.getItemID();
+            ((CanvasPanel)panelCanvas).floorId = 8;//floor.getItemID();
         }
     }
 

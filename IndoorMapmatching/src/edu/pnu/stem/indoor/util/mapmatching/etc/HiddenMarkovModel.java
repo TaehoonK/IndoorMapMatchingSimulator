@@ -7,21 +7,21 @@ package edu.pnu.stem.indoor.util.mapmatching.etc;
  * @author Taehoon Kim, Pusan National University, STEM Lab.
  */
 public class HiddenMarkovModel {
-    private int numOfState;
-    private int numOfObservation;
-    private int[] initStateP;
+    private int numState;
+    private int numObservation;
+    private double[] initStateP;
     private double[][] matrixA;
     private double[][] matrixB;
 
     public HiddenMarkovModel(int stateNum) {
-        numOfState = stateNum;
-        numOfObservation = numOfState;
-        initStateP = new int[numOfState];
-        matrixA = new double[numOfState][numOfState];
-        matrixB = new double[numOfState][numOfObservation];
+        numState = stateNum;
+        numObservation = numState;
+        initStateP = new double[numState];
+        matrixA = new double[numState][numState];
+        matrixB = new double[numState][numObservation];
     }
 
-    public int getNumOfState() { return  numOfState; }
+    public int getNumState() { return numState; }
 
     public double[][] getMatrixA() {
         return matrixA;
@@ -31,8 +31,11 @@ public class HiddenMarkovModel {
         return matrixB;
     }
 
-    public void setInitStateP(int initStateIndex) {
-        this.initStateP[initStateIndex] = 1;
+    public void setInitStateP(int[] initStateIndex) {
+        double probability = 1.0 / initStateIndex.length;
+        for(int stateIndex : initStateIndex) {
+            this.initStateP[stateIndex] = probability;
+        }
     }
 
     public void setMatrixA(double[][] matrixA) {
@@ -47,9 +50,9 @@ public class HiddenMarkovModel {
      *
      * */
     public void clear(){
-        for(int i = 0; i < numOfState; i++) {
+        for(int i = 0; i < numState; i++) {
             initStateP[i] = 0;
-            for(int j = 0; j < numOfState; j++) {
+            for(int j = 0; j < numState; j++) {
                 matrixA[i][j] = 0;
                 matrixB[i][j] = 0;
             }
@@ -57,8 +60,8 @@ public class HiddenMarkovModel {
     }
 
     public void clearOnlyBMatrix() {
-        for(int i = 0; i < numOfState; i++) {
-            for(int j = 0; j < numOfState; j++) {
+        for(int i = 0; i < numState; i++) {
+            for(int j = 0; j < numState; j++) {
                 matrixB[i][j] = 0;
             }
         }
@@ -96,34 +99,119 @@ public class HiddenMarkovModel {
     private double forwardAlgorithm(int[] observations) {
         int T = observations.length;
 
-        double[][] fwd = new double[T][numOfState];
-        double[] coefficients = new double[T];
+        double[][] fwd = new double[T][numState];
 
         // 1. Initialization
-        for(int i = 0; i < numOfState; i++) {
-            coefficients[0] += fwd[0][i] = initStateP[i] * matrixB[i][observations[0]];
+        for(int i = 0; i < numState; i++) {
+            fwd[0][i] = initStateP[i] * matrixB[i][observations[0]];
         }
 
         // 2. Induction
         for(int t = 1; t < T; t++) {
-            for(int i = 0; i < numOfState; i++) {
+            for(int i = 0; i < numState; i++) {
                 double p = matrixB[i][observations[t]];
                 double sum = 0.0;
 
-                for(int j = 0; j < numOfState; j++) {
+                if(p == 0) continue;
+                for(int j = 0; j < numState; j++) {
                     sum += fwd[t-1][j] * matrixA[j][i];
                 }
                 fwd[t][i] = sum * p;
-                if(sum > 0 && p > 0 && sum == 0) {
-                    System.out.println("overflow!!");
-                }
             }
         }
         double probabilitySum = 0;
-        for(int i = 0; i < numOfState; i++) {
+        for(int i = 0; i < numState; i++) {
             probabilitySum += fwd[T-1][i];
         }
 
         return probabilitySum;
+    }
+
+    public int[] decode(int[] observations) {
+        if(observations == null)
+            throw new IllegalArgumentException("observation is null");
+
+        if(observations.length == 0)
+            return null;
+
+        return viterbi(observations);
+    }
+
+    /**
+     * Viterbi-forward Algorithm
+     * reference : https://github.com/accord-net/framework/blob/development/Sources/Accord.Statistics/Models/Markov/HiddenMarkovModel%601.cs
+     * */
+    private int[] viterbi(int[] observations) {
+        int T = observations.length;
+        int states = numState;
+        int maxState;
+        double maxWeight;
+        double weight;
+
+        double[] logPi = initStateP;
+        double[][] logA = matrixA;
+
+        int[][] s = new int[states][T];
+        double[][] lnFwd = new double[states][T];
+
+        // Base
+        for (int i = 0; i < states; i++) {
+            lnFwd[i][0] = logPi[i] + Math.log(matrixB[i][observations[0]]);
+        }
+
+        // Induction
+        for (int t = 1; t < T; t++)
+        {
+            for (int j = 0; j < states; j++)
+            {
+                maxState = 0;
+                maxWeight = lnFwd[0][t - 1] + logA[0][j];
+
+                for (int i = 1; i < states; i++)
+                {
+                    weight = lnFwd[i][t - 1] + logA[i][j];
+
+                    if (weight > maxWeight)
+                    {
+                        maxState = i;
+                        maxWeight = weight;
+                    }
+                }
+
+                lnFwd[j][t] = maxWeight + matrixB[j][observations[t]];
+                s[j][t] = maxState;
+            }
+        }
+
+        // Find maximum value for time T-1
+        maxState = -1;
+        maxWeight = lnFwd[0][T - 1];
+
+        for (int i = 1; i < states; i++)
+        {
+            if (lnFwd[i][T - 1] > maxWeight)
+            {
+                maxState = i;
+                maxWeight = lnFwd[i][T - 1];
+            }
+        }
+
+        if(maxState < 0) {
+            maxState = observations[T-1];
+        }
+
+        // Trackback
+        int[] path = new int[T];
+        path[T - 1] = maxState;
+
+        for (int t = T - 2; t >= 0; t--)
+            path[t] = s[path[t + 1]][t + 1];
+
+
+        // Returns the sequence probability as an out parameter
+        //logLikelihood = maxWeight;
+
+        // Returns the most likely (Viterbi path) for the given sequence
+        return path;
     }
 }

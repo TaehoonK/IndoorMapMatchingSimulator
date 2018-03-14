@@ -183,8 +183,8 @@ public class IndoorUtils {
                 // In case: a cell that containing the end point is disconnected with a building
                 // So, make a point that intersect point between a original line and a cell boundary that containing the start point
                 LineString lineString = gf.createLineString(new Coordinate[]{startP.getCoordinate(), endP.getCoordinate()});
-                Geometry interectionP = lineString.intersection(cellSpaces.get(startPCellIndex).getGeom().getExteriorRing());
-                Coordinate newEndPointCoord = interectionP.getCoordinates()[0];
+                Geometry intersectionP = lineString.intersection(cellSpaces.get(startPCellIndex).getGeom().getExteriorRing());
+                Coordinate newEndPointCoord = intersectionP.getCoordinates()[0];
                 resultIndoorPath = gf.createLineString(new Coordinate[]{startP.getCoordinate(), newEndPointCoord});
             }
             else {
@@ -249,7 +249,8 @@ public class IndoorUtils {
         Coordinate[] coords = new Coordinate[]{startP.getCoordinate(), endP.getCoordinate()};
         LineString lineString = gf.createLineString(coords);
 
-        if(cellSpaceGeom.contains(lineString)) {
+        // TODO: How to determine that topology relation between a linestring and cell geometry exterior??
+        if(cellSpaceGeom.covers(lineString)) {  // in thick model, cover operation is better than contains
             // In case : The Cell contains a straight line between start and end points
             p2pIndoorPath = gf.createLineString(coords);
         }
@@ -282,7 +283,7 @@ public class IndoorUtils {
     public static Integer getCellSpaceIndexWithEpsilon(Coordinate targetCoordinate, ArrayList<CellSpace> cellSpaces) {
         int epsilon = EPSILON;
         int cellIndex = getCellSpaceIndexWithEpsilon(targetCoordinate, epsilon, cellSpaces);
-        while (cellIndex == -1 && epsilon < ChangeCoord.CANVAS_MULTIPLE) {
+        while (cellIndex == -1) {
             epsilon *= 2;
             cellIndex = getCellSpaceIndexWithEpsilon(targetCoordinate, epsilon, cellSpaces);
         }
@@ -311,7 +312,7 @@ public class IndoorUtils {
             }
         }
 
-        double maxArea = 0;
+        double maxArea = 0.0;
         int selectedIndex = -1;
         for(Integer cellIndex : resultWithArea.keySet()) {
             if(maxArea < resultWithArea.get(cellIndex)) {

@@ -80,7 +80,10 @@ public class IndoorFeatures {
      * @return cell space label array
      * */
     public String getCellSpaceLabel(int cellSpaceIndex) {
-        return cellSpaces.get(cellSpaceIndex).getLabel();
+        if(cellSpaceIndex != -1)
+            return cellSpaces.get(cellSpaceIndex).getLabel();
+        else
+            return "Outside";
 
     }
 
