@@ -38,6 +38,12 @@ public class HiddenMarkovModel {
         }
     }
 
+    public void setInitStateP(double[] initStateP) {
+        for(int i = 0; i < initStateP.length; i++) {
+            this.initStateP[i] = initStateP[i];
+        }
+    }
+
     public void setMatrixA(double[][] matrixA) {
         this.matrixA = matrixA;
     }

@@ -7,12 +7,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="7babf45c-c52e-4ec5-af4e-c7192172056a" name="Default" comment="">
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/../IndoorMapmatching/src/edu/pnu/stem/indoor/feature/IndoorFeatures.java" afterPath="$PROJECT_DIR$/../IndoorMapmatching/src/edu/pnu/stem/indoor/feature/IndoorFeatures.java" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/../IndoorMapmatching/src/edu/pnu/stem/indoor/gui/CanvasPanel.java" afterPath="$PROJECT_DIR$/../IndoorMapmatching/src/edu/pnu/stem/indoor/gui/CanvasPanel.java" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/../IndoorMapmatching/src/edu/pnu/stem/indoor/gui/IndoorMapmatchingSim.form" afterPath="$PROJECT_DIR$/../IndoorMapmatching/src/edu/pnu/stem/indoor/gui/IndoorMapmatchingSim.form" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/../IndoorMapmatching/src/edu/pnu/stem/indoor/gui/IndoorMapmatchingSim.java" afterPath="$PROJECT_DIR$/../IndoorMapmatching/src/edu/pnu/stem/indoor/gui/IndoorMapmatchingSim.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/../IndoorMapmatching/src/edu/pnu/stem/indoor/util/ChangeCoord.java" afterPath="$PROJECT_DIR$/../IndoorMapmatching/src/edu/pnu/stem/indoor/util/ChangeCoord.java" />
-      <change type="MODIFICATION" beforePath="$PROJECT_DIR$/../IndoorMapmatching/src/edu/pnu/stem/indoor/util/IndoorUtils.java" afterPath="$PROJECT_DIR$/../IndoorMapmatching/src/edu/pnu/stem/indoor/util/IndoorUtils.java" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/../IndoorMapmatching/src/edu/pnu/stem/indoor/util/mapmatching/HMMIndoorMapMatching.java" afterPath="$PROJECT_DIR$/../IndoorMapmatching/src/edu/pnu/stem/indoor/util/mapmatching/HMMIndoorMapMatching.java" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/../IndoorMapmatching/src/edu/pnu/stem/indoor/util/mapmatching/etc/HiddenMarkovModel.java" afterPath="$PROJECT_DIR$/../IndoorMapmatching/src/edu/pnu/stem/indoor/util/mapmatching/etc/HiddenMarkovModel.java" />
       <change type="MODIFICATION" beforePath="$PROJECT_DIR$/.idea/workspace.xml" afterPath="$PROJECT_DIR$/.idea/workspace.xml" />
@@ -108,9 +105,10 @@
       <file leaf-file-name="VITA_Application.java" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/src/cn/edu/zju/db/datagen/gui/VITA_Application.java">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="152">
-              <caret line="3040" column="17" lean-forward="false" selection-start-line="3040" selection-start-column="17" selection-end-line="3040" selection-end-column="17" />
+            <state relative-caret-position="513">
+              <caret line="1322" column="9" lean-forward="false" selection-start-line="1322" selection-start-column="9" selection-end-line="1322" selection-end-column="9" />
               <folding>
+                <element signature="e#3951#3978#0" expanded="true" />
                 <element signature="e#7999#8010#0" expanded="true" />
                 <element signature="e#8074#8085#0" expanded="true" />
                 <element signature="e#8314#8333#0" expanded="true" />
@@ -121,6 +119,12 @@
                 <element signature="e#8727#8743#0" expanded="true" />
                 <element signature="e#8808#8824#0" expanded="true" />
                 <element signature="e#8895#8911#0" expanded="true" />
+                <element signature="e#38371#38450#0" expanded="true" />
+                <element signature="e#38449#38450#0" expanded="true" />
+                <element signature="e#65223#65312#0" expanded="true" />
+                <element signature="e#65311#65312#0" expanded="true" />
+                <element signature="e#65383#65479#0" expanded="true" />
+                <element signature="e#65478#65479#0" expanded="true" />
                 <element signature="e#83978#83987#0" expanded="true" />
               </folding>
             </state>
@@ -184,11 +188,11 @@
     <detection-done>true</detection-done>
     <sorting>DEFINITION_ORDER</sorting>
   </component>
-  <component name="ProjectFrameBounds" extendedState="6">
-    <option name="x" value="240" />
-    <option name="y" value="493" />
-    <option name="width" value="973" />
-    <option name="height" value="850" />
+  <component name="ProjectFrameBounds" extendedState="7">
+    <option name="x" value="2396" />
+    <option name="y" value="1004" />
+    <option name="width" value="3892" />
+    <option name="height" value="3400" />
   </component>
   <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
   <component name="ProjectView">
@@ -206,6 +210,18 @@
       <foldersAlwaysOnTop value="true" />
     </navigator>
     <panes>
+      <pane id="AndroidView" />
+      <pane id="ProjectPane">
+        <subPane>
+          <expand>
+            <path>
+              <item name="Vita" type="b2602c69:ProjectViewProjectNode" />
+              <item name="vita-master" type="462c0819:PsiDirectoryNode" />
+            </path>
+          </expand>
+          <select />
+        </subPane>
+      </pane>
       <pane id="PackagesPane">
         <subPane>
           <expand>
@@ -242,19 +258,7 @@
         </subPane>
       </pane>
       <pane id="Scope" />
-      <pane id="AndroidView" />
       <pane id="Scratches" />
-      <pane id="ProjectPane">
-        <subPane>
-          <expand>
-            <path>
-              <item name="Vita" type="b2602c69:ProjectViewProjectNode" />
-              <item name="vita-master" type="462c0819:PsiDirectoryNode" />
-            </path>
-          </expand>
-          <select />
-        </subPane>
-      </pane>
     </panes>
   </component>
   <component name="PropertiesComponent">
@@ -429,14 +433,18 @@
       <workItem from="1518568724289" duration="630000" />
       <workItem from="1519352068271" duration="1249000" />
       <workItem from="1519609893159" duration="134000" />
+      <workItem from="1524126775603" duration="610000" />
+      <workItem from="1526538595113" duration="4140000" />
+      <workItem from="1526609131923" duration="1273000" />
     </task>
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="32572000" />
+    <option name="totallyTimeSpent" value="38595000" />
   </component>
   <component name="ToolWindowManager">
-    <frame x="-8" y="22" width="2576" height="1426" extended-state="6" />
+    <frame x="-8" y="22" width="2576" height="1426" extended-state="7" />
+    <editor active="true" />
     <layout>
       <window_info id="Palette" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="TODO" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="6" side_tool="false" content_ui="tabs" />
@@ -446,18 +454,18 @@
       <window_info id="Capture Analysis" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Event Log" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.40713632" sideWeight="0.50487804" order="7" side_tool="true" content_ui="tabs" />
       <window_info id="Maven Projects" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
-      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.29169962" sideWeight="0.49512196" order="2" side_tool="false" content_ui="tabs" />
+      <window_info id="Run" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.29011858" sideWeight="0.49512196" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Version Control" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Terminal" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="7" side_tool="false" content_ui="tabs" />
       <window_info id="Capture Tool" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Designer" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
-      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.06796502" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
+      <window_info id="Project" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="true" show_stripe_button="true" weight="0.08028617" sideWeight="0.5" order="0" side_tool="false" content_ui="combo" />
       <window_info id="Database" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Structure" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="Ant Build" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="1" side_tool="false" content_ui="tabs" />
       <window_info id="UI Designer" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="false" content_ui="tabs" />
       <window_info id="Theme Preview" active="false" anchor="right" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="3" side_tool="false" content_ui="tabs" />
-      <window_info id="Debug" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.30331755" sideWeight="0.49863106" order="3" side_tool="false" content_ui="tabs" />
+      <window_info id="Debug" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.3027668" sideWeight="0.49863106" order="3" side_tool="false" content_ui="tabs" />
       <window_info id="Favorites" active="false" anchor="left" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="2" side_tool="true" content_ui="tabs" />
       <window_info id="Cvs" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.25" sideWeight="0.5" order="4" side_tool="false" content_ui="tabs" />
       <window_info id="Message" active="false" anchor="bottom" auto_hide="false" internal_type="DOCKED" type="DOCKED" visible="false" show_stripe_button="true" weight="0.33" sideWeight="0.5" order="0" side_tool="false" content_ui="tabs" />
@@ -521,6 +529,7 @@
         <state relative-caret-position="58680">
           <caret line="1304" column="22" lean-forward="false" selection-start-line="1304" selection-start-column="12" selection-end-line="1304" selection-end-column="22" />
           <folding>
+            <element signature="e#3951#3978#0" expanded="true" />
             <element signature="e#7999#8010#0" expanded="true" />
             <element signature="e#8074#8085#0" expanded="true" />
             <element signature="e#8314#8333#0" expanded="true" />
@@ -531,6 +540,12 @@
             <element signature="e#8727#8743#0" expanded="true" />
             <element signature="e#8808#8824#0" expanded="true" />
             <element signature="e#8895#8911#0" expanded="true" />
+            <element signature="e#38371#38450#0" expanded="true" />
+            <element signature="e#38449#38450#0" expanded="true" />
+            <element signature="e#65223#65312#0" expanded="true" />
+            <element signature="e#65311#65312#0" expanded="true" />
+            <element signature="e#65383#65479#0" expanded="true" />
+            <element signature="e#65478#65479#0" expanded="true" />
             <element signature="e#83978#83987#0" expanded="true" />
           </folding>
         </state>
@@ -891,9 +906,10 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/src/cn/edu/zju/db/datagen/gui/VITA_Application.java">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="152">
-          <caret line="3040" column="17" lean-forward="false" selection-start-line="3040" selection-start-column="17" selection-end-line="3040" selection-end-column="17" />
+        <state relative-caret-position="513">
+          <caret line="1322" column="9" lean-forward="false" selection-start-line="1322" selection-start-column="9" selection-end-line="1322" selection-end-column="9" />
           <folding>
+            <element signature="e#3951#3978#0" expanded="true" />
             <element signature="e#7999#8010#0" expanded="true" />
             <element signature="e#8074#8085#0" expanded="true" />
             <element signature="e#8314#8333#0" expanded="true" />
@@ -904,6 +920,12 @@
             <element signature="e#8727#8743#0" expanded="true" />
             <element signature="e#8808#8824#0" expanded="true" />
             <element signature="e#8895#8911#0" expanded="true" />
+            <element signature="e#38371#38450#0" expanded="true" />
+            <element signature="e#38449#38450#0" expanded="true" />
+            <element signature="e#65223#65312#0" expanded="true" />
+            <element signature="e#65311#65312#0" expanded="true" />
+            <element signature="e#65383#65479#0" expanded="true" />
+            <element signature="e#65478#65479#0" expanded="true" />
             <element signature="e#83978#83987#0" expanded="true" />
           </folding>
         </state>

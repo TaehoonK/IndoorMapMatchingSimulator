@@ -1,6 +1,8 @@
 package edu.pnu.stem.indoor.feature;
 
 import com.vividsolutions.jts.geom.*;
+
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -16,7 +18,6 @@ public class IndoorFeatures {
     private ArrayList<CellSpace> cellSpaces = null;
     private HashMap<String, Integer> cellSpaceIndexMap = null;
     private boolean[][] topologyGraph = null;
-    private GeometryFactory gf = null;
 
     public IndoorFeatures () {
         this(new GeometryFactory());
@@ -25,7 +26,7 @@ public class IndoorFeatures {
     public IndoorFeatures (GeometryFactory gf) {
         cellSpaces = new ArrayList<>();
         cellSpaceIndexMap = new HashMap<>();
-        this.gf = gf;
+        //this.gf = gf;
     }
 
     public void addCellSpace(CellSpace cellSpace) {
@@ -97,6 +98,7 @@ public class IndoorFeatures {
      * */
     public int[] getCellSpaceIndex(Coordinate coordinate) {
         //TODO : Need to modify to operate on three-dimensional coordinate(or additional floor information)
+        GeometryFactory gf = new GeometryFactory();
         ArrayList<Integer> resultList = new ArrayList<>();
         int closestCellIndex = -1;
         Point point = gf.createPoint(coordinate);

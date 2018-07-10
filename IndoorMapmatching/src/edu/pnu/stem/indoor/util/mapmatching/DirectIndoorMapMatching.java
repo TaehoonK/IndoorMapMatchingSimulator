@@ -63,7 +63,10 @@ public class DirectIndoorMapMatching implements IndoorMapMatching {
                 }
             }
         }
-
         return dimmResult;
+    }
+
+    int getDIMMResult(Coordinate coord) {
+        return indoorFeatures.getCellSpaceIndex(coord)[0];
     }
 }

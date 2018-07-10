@@ -5,6 +5,7 @@ import com.vividsolutions.jts.geom.GeometryFactory;
 import com.vividsolutions.jts.geom.LineString;
 import com.vividsolutions.jts.geom.Polygon;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 
 /**
@@ -18,15 +19,14 @@ public class CellSpace {
     private String label;   // Name to represent space
     private Polygon geom;   // Geometry expressing space
     private ArrayList<LineString> doors;    // An array that stores the geometry expressing door. The door is assumed to be represented by a LineString
-    private ArrayList<LineString> visibilityEdges;  // A collection of edges of the graph that represent visibility from point to point in geometry that represents space
-    private ArrayList<LineString> door2doorEdges;   // An array that stores the path between doors
-    private GeometryFactory gf;
+    //private ArrayList<LineString> visibilityEdges;  // A collection of edges of the graph that represent visibility from point to point in geometry that represents space
+    //private ArrayList<LineString> door2doorEdges;   // An array that stores the path between doors
+    //private GeometryFactory gf;
 
     private CellSpace() {
         doors = new ArrayList<>();
-        visibilityEdges = new ArrayList<>();
-        door2doorEdges = new ArrayList<>();
-        gf = new GeometryFactory();
+        //visibilityEdges = new ArrayList<>();
+        //door2doorEdges = new ArrayList<>();
     }
 
     public CellSpace(Polygon geom) {
@@ -35,11 +35,11 @@ public class CellSpace {
     }
 
     public ArrayList<LineString> getDoor2doorEdges() {
-        return door2doorEdges;
+        return null;//door2doorEdges;
     }
 
     public ArrayList<LineString> getVisibilityEdges() {
-        return visibilityEdges;
+        return null;//visibilityEdges;
     }
 
     public ArrayList<LineString> getDoors() {
@@ -73,8 +73,9 @@ public class CellSpace {
      * TODO : How to reuse visibility graph? need optimization
      * */
     public void addDoors(LineString newDoor) {
+        GeometryFactory gf = new GeometryFactory();
         doors.add(newDoor);
-
+/*
         if(visibilityEdges.isEmpty()) {
             setVisibilityGraphEdges();
         }
@@ -109,6 +110,7 @@ public class CellSpace {
                 }
             }
         }
+        */
     }
 
     /**
@@ -116,11 +118,13 @@ public class CellSpace {
      * visibilityEdges is a collection of edges of the graph that represent visibility from point to point in geometry that represents space.
      * */
     private void setVisibilityGraphEdges() {
+        /*
         visibilityEdges.clear();
         Coordinate[] coords = geom.getCoordinates();
         for (Coordinate from : coords) {
             visibilityEdges = addNodetoVGraph(from, visibilityEdges);
         }
+        */
     }
 
     /**
@@ -133,6 +137,7 @@ public class CellSpace {
      * @return added visibilityEdgeList
      * */
     private ArrayList<LineString> addNodetoVGraph(Coordinate from, ArrayList<LineString> visibilityEdgeList){
+        GeometryFactory gf = new GeometryFactory();
         Coordinate[] coords = geom.getCoordinates();
         for (Coordinate to : coords) {
             if (from.equals(to)) continue;
@@ -160,10 +165,13 @@ public class CellSpace {
      * @return Edge list of visible graphs reflecting temporarily added nodes
      * */
     public ArrayList<LineString> addNodetoVGraph(Coordinate startP, Coordinate endP){
+        /*
         ArrayList<LineString> temporalResult = (ArrayList<LineString>) visibilityEdges.clone();
         temporalResult = addNodetoVGraph(startP, temporalResult);
         temporalResult = addNodetoVGraph(endP, temporalResult);
 
         return temporalResult;
+        */
+        return null;
     }
 }

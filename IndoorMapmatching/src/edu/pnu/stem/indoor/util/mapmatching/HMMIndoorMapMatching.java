@@ -7,6 +7,9 @@ import edu.pnu.stem.indoor.util.mapmatching.etc.HiddenMarkovModel;
 import edu.pnu.stem.indoor.util.IndoorUtils;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
 
 /**
  *
@@ -21,34 +24,55 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
     private IndoorFeatures indoorFeatures;
     private DirectIndoorMapMatching dimm;
     private HiddenMarkovModel hmm;
-    public Geometry[] rawCircleBufferGeometries;
+    private Geometry[] unionBufferGeom;
+    private int[] cellIndexCount;
+    private ArrayList<Geometry> tempRawCircleBufferGeom;
+    private ArrayList<Integer> tempCellIndex;
 
     public HMMIndoorMapMatching(IndoorFeatures indoorFeatures){
         dimm = new DirectIndoorMapMatching(indoorFeatures);
         hmm = new HiddenMarkovModel(indoorFeatures.getCellSpaces().size());
-        rawCircleBufferGeometries = new Geometry[hmm.getNumState()];
-        for(int i = 0; i < rawCircleBufferGeometries.length; i++) {
-            rawCircleBufferGeometries[i] = null;
+        unionBufferGeom = new Geometry[hmm.getNumState()];
+        for(int i = 0; i < unionBufferGeom.length; i++) {
+            unionBufferGeom[i] = null;
         }
+        cellIndexCount = new int[hmm.getNumState()];
+        tempRawCircleBufferGeom = new ArrayList<>();
+        tempCellIndex = new ArrayList<>();
         setIndoorFeatures(indoorFeatures);
     }
 
-    public void clear() {
-        hmm.clear();
-        for(int i = 0; i < rawCircleBufferGeometries.length; i++) {
-            rawCircleBufferGeometries[i] = null;
-        }
+    public void setCircleSize(double radius) {
+        this.circleSize = radius;
     }
 
-    public void clearOnlyBMatrix() {
-        hmm.clearOnlyBMatrix();
-        for(int i = 0; i < rawCircleBufferGeometries.length; i++) {
-            rawCircleBufferGeometries[i] = null;
+
+    public void clear() {
+        hmm.clear();
+        for(int i = 0; i < unionBufferGeom.length; i++) {
+            unionBufferGeom[i] = null;
         }
+        cellIndexCount = new int[hmm.getNumState()];
+        tempRawCircleBufferGeom.clear();
+        tempCellIndex.clear();
     }
 
     /**
-     *
+     * 관측 확률(B matrix) 만을 초기화 하는 함수
+     * 전체 실험 시에 B matrix를 초기화하는 매개변수를 변경 시 초기화가 필요하여 생성
+     * */
+    public void clearOnlyBMatrix() {
+        hmm.clearOnlyBMatrix();
+        for(int i = 0; i < unionBufferGeom.length; i++) {
+            unionBufferGeom[i] = null;
+        }
+        cellIndexCount = new int[hmm.getNumState()];
+        tempRawCircleBufferGeom.clear();
+        tempCellIndex.clear();
+    }
+
+    /**
+     *  실내 그래프의 연결성을 기반의 상태전이확률 행렬(A matrix) 설정 방법
      * */
     public void makeAMatrixByTopology() {
         double[][] matrixA = hmm.getMatrixA();
@@ -74,10 +98,13 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
     }
 
     /**
-     * @param staticProbability
+     *  고정 확률(sigma) 기반의 상태전이확률 행렬(A matrix) 설정 방법
+     *  실내 그래프의 연결성을 기반으로 하나 동일한 셀에 머물 확률(sigma)을 고정 값으로 설정하는 방법
+     *
+     * @param sigma
      * */
-    public void makeAMatrixByStaticP(final double staticProbability) {
-        if(staticProbability > 1) return;
+    public void makeAMatrixByStaticP(final double sigma) {
+        if(sigma > 1) return;
         double[][] matrixA = hmm.getMatrixA();
 
         int doorCount;
@@ -89,10 +116,10 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
             for(int j = 0; j < topologyGraph.length; j++) {
                 if(topologyGraph[i][j]) {
                     if(i == j) {
-                        matrixA[i][j] = staticProbability;
+                        matrixA[i][j] = sigma;
                     }
                     else {
-                        matrixA[i][j] = (1.0 - staticProbability) / doorCount;
+                        matrixA[i][j] = (1.0 - sigma) / doorCount;
                         connectCount++;
                     }
                 }
@@ -104,7 +131,8 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
     }
 
     /**
-     *
+     *  실내 그래프의 홉 카운트 기반의 상태전이확률 행렬(A matrix) 설정 방법
+     *  두 셀 사이의 최단 홉 개수이용하여 확률 값을 설정
      * */
     public void makeAMatrixByDistance() {
         double[][] matrixA = hmm.getMatrixA();
@@ -132,25 +160,17 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
             }
         }
 
-        int totalLength;
+        // TODO: 설정되는 확률 값이 1이하라 정규화를 하지 않음...필요할까?
         int connectCount;
         for(int i = 0; i < hopCount.length; i++) {
-            totalLength = 0;
             connectCount = 0;
             for (int j = 0; j < hopCount.length; j++) {
-                if(hopCount[i][j] != Integer.MAX_VALUE)
-                    totalLength += hopCount[i][j];
-            }
-
-            for (int j = 0; j < hopCount.length; j++) {
                 if(hopCount[i][j] != Integer.MAX_VALUE) {
-                    //double value = (double) hopCount[i][j] / totalLength;
                     matrixA[i][j] = 1.0 / hopCount[i][j];
                     if(i != j)
                         connectCount++;
                 }
             }
-
             if(connectCount == 0) matrixA[i][i] = 0.0;
         }
 
@@ -158,6 +178,9 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
     }
 
     /**
+     *  셀 기하의 버퍼 기하를 기반으로 관측확률 행렬(B matrix) 설정 방법
+     *  버퍼 기하와 다른 셀(혹은 같은 셀)이 겹치는 영역을 관측확률 값으로 설정
+     *
      * @param bufferLength
      * */
     public void makeBMatrixCellBuffer(final double bufferLength) {
@@ -185,34 +208,133 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
     }
 
     /**
+     *  측위 좌표 기준 버퍼를 기반으로 관측확률 행렬(B matrix) 설정 방법
+     *  아래 3단계로 설정
+     *  1. 측위 좌표가 속한 셀을 기준으로 버퍼 기하들을 UNION
+     *  2. UNION한 기하를 이용하여 각 셀과 겹치는 영역을 관측확률 값으로 설정
+     *  3. 정규화 수행
+     *
      * @param radius
      * @param lastCoord
      * */
     public void makeBmatrixCircleBuffer(final Coordinate lastCoord, final double radius) {
-        circleSize = radius;
         double[][] matrixB = hmm.getMatrixB();
 
-        Polygon circleBuffer = createCircle(lastCoord, circleSize);
-        int[] i_list = indoorFeatures.getCellSpaceIndex(lastCoord);
-        int cellIndex = i_list[0];
+        Polygon circleBuffer = createCircle(lastCoord, radius);
+        int cellIndex = indoorFeatures.getCellSpaceIndex(lastCoord)[0];
 
-        if(rawCircleBufferGeometries[cellIndex] == null) {
-            rawCircleBufferGeometries[cellIndex] = circleBuffer;
+        if(unionBufferGeom[cellIndex] == null) {
+            unionBufferGeom[cellIndex] = circleBuffer;
         }
         else {
-            rawCircleBufferGeometries[cellIndex] = rawCircleBufferGeometries[cellIndex].union(circleBuffer);
+            unionBufferGeom[cellIndex] = unionBufferGeom[cellIndex].union(circleBuffer);
         }
 
         for(int j = 0; j < hmm.getNumState(); j++) {
             Polygon cellGeom = indoorFeatures.getCellSpace(j).getGeom();
-            if(cellGeom.intersects(rawCircleBufferGeometries[cellIndex])) {
-                matrixB[cellIndex][j] = cellGeom.intersection(rawCircleBufferGeometries[cellIndex]).getArea();
+            if(cellGeom.intersects(unionBufferGeom[cellIndex])) {
+                matrixB[cellIndex][j] = cellGeom.intersection(unionBufferGeom[cellIndex]).getArea();
             }
         }
+
         // normalization
-        matrixB = normalization(matrixB);
+        matrixB = normalization(matrixB, cellIndex);
 
         hmm.setMatrixB(matrixB);
+    }
+
+    public void makeBmatrixCircleBuffer(final Coordinate lastCoord, final double radius, final int windowSize) {
+        double[][] matrixB = hmm.getMatrixB();
+
+        Polygon circleBuffer = createCircle(lastCoord, radius);
+        int lastIndex = indoorFeatures.getCellSpaceIndex(lastCoord)[0];
+
+        if(tempRawCircleBufferGeom.size() < windowSize) {
+            if(unionBufferGeom[lastIndex] == null) {
+                unionBufferGeom[lastIndex] = circleBuffer;
+            }
+            else {
+                unionBufferGeom[lastIndex] = unionBufferGeom[lastIndex].union(circleBuffer);
+            }
+        }
+        else {
+            // 현재 셀 인덱스가 리스트에서 처음 나타난 경우 -> 그대로 추가 (null인 경우와 동일)
+            // 현재 셀 인덱스와 동일한 인덱스가 리스트 내에 하나만 있는경우(단, 첫번째 객체는 제외) -> 이전 기하와 Union하여 활용
+            // 이외의 경우 -> 현재 셀 인덱스에 해당되는 객체만 업데이트(단, 첫번째 객체는 제외)
+            // 리스트의 첫번째 객체(인덱스)가 리스트 내에 하나만 있는 경우 -> 인덱스에 해당하는 확률값들 삭제
+            // 이외의 경우 -> 첫번째 인덱스에 해당되는 객체만 업데이트
+            int firstIndex = tempCellIndex.get(0);
+            tempCellIndex.remove(0);
+            tempRawCircleBufferGeom.remove(0);
+
+            if(unionBufferGeom[lastIndex] == null) {
+                unionBufferGeom[lastIndex] = circleBuffer;
+            }
+            else if(cellIndexCount[lastIndex] == 1) {
+                if(lastIndex != firstIndex) {
+                    unionBufferGeom[lastIndex] = unionBufferGeom[lastIndex].union(circleBuffer);
+                }
+                else {
+                    unionBufferGeom[lastIndex] = circleBuffer;
+                }
+            }
+            else {
+                unionBufferGeom[lastIndex] = getUpdatedGeometry(lastIndex);
+            }
+            if(cellIndexCount[firstIndex] == 1) {
+                if(lastIndex != firstIndex) {
+                    unionBufferGeom[firstIndex] = null;
+                    for(int j = 0; j < hmm.getNumState(); j++) {
+                        matrixB[firstIndex][j] = 0;
+                    }
+                }
+            }
+            else {
+                unionBufferGeom[firstIndex] = getUpdatedGeometry(firstIndex);
+                for(int j = 0; j < hmm.getNumState(); j++) {
+                    Polygon cellGeom = indoorFeatures.getCellSpace(j).getGeom();
+                    if(unionBufferGeom[firstIndex] == null)
+                        System.out.println("???");
+                    if(cellGeom.intersects(unionBufferGeom[firstIndex])) {
+                        matrixB[firstIndex][j] = cellGeom.intersection(unionBufferGeom[firstIndex]).getArea();
+                    }
+                }
+                matrixB = normalization(matrixB, firstIndex);
+            }
+            cellIndexCount[firstIndex]--;
+        }
+
+        for(int j = 0; j < hmm.getNumState(); j++) {
+            Polygon cellGeom = indoorFeatures.getCellSpace(j).getGeom();
+            if(unionBufferGeom[lastIndex] == null)
+                System.out.println("???");
+            if(cellGeom.intersects(unionBufferGeom[lastIndex])) {
+                matrixB[lastIndex][j] = cellGeom.intersection(unionBufferGeom[lastIndex]).getArea();
+            }
+        }
+        matrixB = normalization(matrixB, lastIndex);
+
+        tempRawCircleBufferGeom.add(circleBuffer);
+        tempCellIndex.add(lastIndex);
+        cellIndexCount[lastIndex]++;
+        hmm.setMatrixB(matrixB);
+    }
+
+    public Geometry getUpdatedGeometry(int cellIndex) {
+        Geometry updatedGeom = null;
+        boolean isFirst = true;
+        for(int i = 0; i < tempCellIndex.size(); i++) {
+            if(tempCellIndex.get(i).equals(cellIndex)) {
+                if(isFirst) {
+                    updatedGeom = tempRawCircleBufferGeom.get(i);
+                    isFirst = false;
+                }
+                else {
+                    updatedGeom = updatedGeom.union(tempRawCircleBufferGeom.get(i));
+                }
+            }
+        }
+        return updatedGeom;
     }
 
     @Override
@@ -223,6 +345,8 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
     @Override
     public String[] getMapMatchingResult(LineString trajectory) {
         String[] mapMatchingResult = new String[trajectory.getNumPoints()];
+        System.out.println("currently not used");
+        /*
         ArrayList<Integer> observationList = getRealTimeMapMatchingResult(trajectory);
 
         for(int i = 0; i < observationList.size(); i++) {
@@ -235,19 +359,21 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
                 mapMatchingResult[i] = indoorFeatures.getCellSpace(cellSpaceIndex).getLabel();
             }
         }
-
+        */
         return mapMatchingResult;
     }
 
     /**
+     *
      * @param endPoint
      * @param observationLabelList
-     * @param radius */
-    public String getMapMatchingResult(Point endPoint, String[] observationLabelList, double radius) {
+     * @param radius
+     * */
+    public String getMapMatchingResult(Point endPoint, ArrayList<String> observationLabelList, double radius) {
         String mapMatchingResult;
-        int[] observations = new int[observationLabelList.length + 1];
-        for(int i = 0; i < observationLabelList.length; i++) {
-            observations[i] = indoorFeatures.getCellSpaceIndex(observationLabelList[i]);
+        int[] observations = new int[observationLabelList.size() + 1];
+        for(int i = 0; i < observationLabelList.size(); i++) {
+            observations[i] = indoorFeatures.getCellSpaceIndex(observationLabelList.get(i));
         }
         int cellSpaceIndex = realTimeMapMatching(endPoint, observations, radius);
 
@@ -261,21 +387,34 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
         return mapMatchingResult;
     }
 
+    /**
+     *
+     * @param endPoint
+     * @param trajectory
+     * @param radius
+     * */
     public String getMapMatchingResult(Point endPoint, Geometry trajectory, double radius) {
         String mapMatchingResult;
         int[] dimmResult = null, observations = null;
+
         if(trajectory.getNumPoints() == 0) {
+            setInitalProbability(endPoint);
             observations = new int[1];
         }
         else if(trajectory instanceof Point) {
+            setInitalProbability((Point) trajectory);
             observations = new int[]{indoorFeatures.getCellSpaceIndex(trajectory.getCoordinate())[0],0};
         }
         else if(trajectory instanceof LineString){
+            Point startP = ((LineString) trajectory).getStartPoint();
+            setInitalProbability(startP);
+
             dimmResult = dimm.getDIMMResult((LineString) trajectory);
             observations = hmm.decode(dimmResult);
         }
 
         int cellSpaceIndex = realTimeMapMatching(endPoint, observations, radius);
+        //int cellSpaceIndex = observations[observations.length - 1];
 
         if(cellSpaceIndex == -1) {
             mapMatchingResult = "Impossible";
@@ -287,10 +426,30 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
         return mapMatchingResult;
     }
 
+    public void setInitalProbability(Point startP) {
+        double candidateRadius = circleSize;
+        double[] initStateP = new double[hmm.getNumState()];
+
+        boolean isSet = false;
+        while (!isSet) {
+            Polygon circleBuffer = (Polygon) startP.buffer(candidateRadius);
+            for(int i = 0; i < indoorFeatures.getCellSpaces().size(); i++) {
+                if(indoorFeatures.getCellSpace(i).getGeom().intersects(circleBuffer)) {
+                    initStateP[i] = indoorFeatures.getCellSpace(i).getGeom().intersection(circleBuffer).getArea();
+                    isSet = true;
+                }
+            }
+            candidateRadius *= 2;
+        }
+        hmm.setInitStateP(normalization(initStateP));
+    }
+
     /**
+     *
      * @param endPoint
      * @param observations
-     * @param radius */
+     * @param radius
+     * */
     private int realTimeMapMatching(Point endPoint, int[] observations, double radius) {
         // Generate a candidate set for the last positioning point
         int[] candidateIndexes = getCandidateIndexArray(endPoint, radius);
@@ -299,11 +458,6 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
         while(candidateIndexes.length == 0) {
             candidateRadius *= 2;
             candidateIndexes = getCandidateIndexArray(endPoint, candidateRadius);
-        }
-
-        // Set a initial state probability
-        if(observations.length == 1) {
-            hmm.setInitStateP(candidateIndexes);
         }
 
         // Select a cell index from candidate set by property of HMM evaluate results
@@ -397,6 +551,11 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
         return selectedResult;
     }
 
+    /**
+     *
+     * @param point
+     * @param candidateBufferRadius
+     * */
     private int[] getCandidateIndexArray(Point point, double candidateBufferRadius) {
         Polygon circleBuffer = (Polygon) point.buffer(candidateBufferRadius);
         ArrayList<Integer> candidateSet = new ArrayList<>();
@@ -432,6 +591,44 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
         return matrix;
     }
 
+    /**
+     *
+     * @param matrix
+     * @param rowIndex
+     * */
+    private double[][] normalization(double[][] matrix, int rowIndex) {
+        double rowSum = 0.0;
+        for(int j = 0; j < matrix.length; j++) {
+            rowSum += matrix[rowIndex][j];
+        }
+        if(rowSum != 0) {
+            for(int j = 0; j < matrix.length; j++) {
+                matrix[rowIndex][j] = matrix[rowIndex][j] / rowSum;
+            }
+        }
+
+        return matrix;
+    }
+
+    private double[] normalization(double[] matrix) {
+        double rowSum = 0.0;
+        for(int j = 0; j < matrix.length; j++) {
+            rowSum += matrix[j];
+        }
+        if(rowSum != 0) {
+            for(int j = 0; j < matrix.length; j++) {
+                matrix[j] = matrix[j] / rowSum;
+            }
+        }
+
+        return matrix;
+    }
+
+    /**
+     *
+     * @param centerP
+     * @param radius
+     * */
     private Polygon createCircle(Coordinate centerP, final double radius) {
         GeometricShapeFactory geometricShapeFactory = new GeometricShapeFactory();
         geometricShapeFactory.setNumPoints(16);
@@ -440,4 +637,49 @@ public class HMMIndoorMapMatching implements IndoorMapMatching {
 
         return geometricShapeFactory.createCircle();
     }
+
+// SIG 용 함수 시작
+    public String getLable(int cellIndex) {
+        return indoorFeatures.getCellSpace(cellIndex).getLabel();
+    }
+
+    public int getMapMatchingResult(Point endPoint, Geometry trajectory, double radius, List<Integer> prevObservations) {
+        int[] dimmResult = null, observations = null;
+
+        // 초기 확률 및 이전 관측열 설정
+        if(trajectory.getNumPoints() == 0) {
+            setInitalProbability(endPoint);
+            observations = new int[1];
+        }
+        else if(trajectory instanceof Point) {
+            setInitalProbability((Point) trajectory);
+            observations = new int[]{indoorFeatures.getCellSpaceIndex(trajectory.getCoordinate())[0],0};
+        }
+        else if(trajectory instanceof LineString){
+            Point startP = ((LineString) trajectory).getStartPoint();
+            setInitalProbability(startP);
+            observations = new int[prevObservations.size() + 1];
+            for (int i = 0; i < prevObservations.size(); i++) {
+                observations[i] = prevObservations.get(i);
+            }
+        }
+
+        // 입력된 측위점에 대해 HIMM 수행
+        int cellSpaceIndex = realTimeMapMatching(endPoint, observations, radius);
+
+        // 결과를 못 찾는 경우 DIMM 결과 반환
+        if(cellSpaceIndex == -1) {
+            if(trajectory instanceof LineString){
+                dimmResult = dimm.getDIMMResult((LineString) trajectory);
+                if(dimmResult != null) {
+                    cellSpaceIndex = dimmResult[dimmResult.length - 1];
+                }
+            } else if(trajectory instanceof Point){
+                cellSpaceIndex = dimm.getDIMMResult((trajectory).getCoordinate());
+            }
+        }
+
+        return cellSpaceIndex;
+    }
+// SIG 용 함수 끝
 }
