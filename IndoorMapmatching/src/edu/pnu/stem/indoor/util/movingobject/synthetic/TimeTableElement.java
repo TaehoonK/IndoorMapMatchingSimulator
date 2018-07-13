@@ -1,4 +1,4 @@
-package edu.pnu.stem.indoor.util;
+package edu.pnu.stem.indoor.util.movingobject.synthetic;
 
 public class TimeTableElement {
     int startCellIndex;

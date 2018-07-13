@@ -4,6 +4,7 @@ import com.vividsolutions.jts.geom.*;
 import com.vividsolutions.jts.operation.distance.DistanceOp;
 import edu.pnu.stem.indoor.feature.CellSpace;
 import edu.pnu.stem.indoor.feature.VisibilityGraph;
+import edu.pnu.stem.indoor.util.parser.ChangeCoord;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -86,7 +87,7 @@ public class IndoorUtils {
         }
 
         if(startPCellIndex == -1 || endPCellIndex == -1) {
-            // Thick 모델의 경우 벽사이로 좌표가 입력되는 경우를 처리해줘야 한다
+            // For the Thick model, need to handle the case where coordinates are entered between walls
             if(startPCellIndex == -1) {
                 startPCellIndex = getCellSpaceIndexWithEpsilon(startP.getCoordinate(), cellSpaces);
                 startP = getNearestPoint(startP, cellSpaces.get(startPCellIndex).getGeom());
@@ -108,11 +109,11 @@ public class IndoorUtils {
                 resultIndoorPath = getIndoorRoute(startPCellIndex, endPCellIndex, startP, endP, cellSpaces);
                 if(resultIndoorPath == null) {
                     // In case : There is no connection between start and end
-                    // 이 경우, endP에 대해서 startP가 소속된 Cell에 속하도록 보정이 필요
-                    // 아래 두 가지 방법으로 가능. 현재는 2번 방법으로 구현
-                    // 1. startP와 endP간의 직선을 생성, Cellboundary와 교차되는 점을 찾아 해당 점으로 보정
-                    // 2. endP와 Cellboundary간 가장 가까운 점을 찾아 해당 점으로 보정
-                    // 이후 같은 Cell 내에서의 indoor route를 찾는다
+                    // In this case, the endP is corrected to belong to the cell to which startP belongs
+                    // There are two ways to do this: Currently implemented in 2
+                    // 1. Creates a straight line between startP and endP, corrects to a point intersecting CellBoundary
+                    // 2. Corrected to the closest point between endP and CellBoundary
+                    // Then find the indoor route in the same cell
                     endP = getNearestPoint(endP, cellSpaces.get(startPCellIndex).getGeom());
                     resultIndoorPath = makeIndoorRouteInCell(startP, endP, cellSpaces.get(startPCellIndex));
                 }
@@ -129,7 +130,14 @@ public class IndoorUtils {
      * In case : trajectory cover several cell spaces
      * Consider only same floor's doors connection
      * TODO : Make door2door graph take into account several floors
-     * */
+     *
+     * @param startPCellIndex
+     * @param endPCellIndex
+     * @param startP
+     * @param endP
+     * @param cellSpaces
+     * @return
+     */
     private static LineString getIndoorRoute(int startPCellIndex, int endPCellIndex, Point startP, Point endP, ArrayList<CellSpace> cellSpaces) {
         LineString resultIndoorPath = null;
         VisibilityGraph graph = new VisibilityGraph();
@@ -140,7 +148,7 @@ public class IndoorUtils {
                 ArrayList<LineString> doors = new ArrayList<>();
                 for (CellSpace cellSpace: cellSpaces) {
                     ArrayList<LineString> d2dGraph = cellSpace.getDoor2doorEdges();
-                    if(d2dGraph.size() != 0) {
+                    if(d2dGraph != null && d2dGraph.size() != 0) {
                         graph.addEdges(d2dGraph);
                     }
                     doors.addAll(cellSpace.getDoors());
@@ -268,6 +276,13 @@ public class IndoorUtils {
         return p2pIndoorPath;
     }
 
+    /**
+     *
+     *
+     * @param point
+     * @param polygon
+     * @return
+     */
     private static Point getNearestPoint(Point point, Polygon polygon) {
         Coordinate[] points = DistanceOp.nearestPoints(polygon, point);
         point = gf.createPoint(points[0]);
@@ -458,9 +473,10 @@ public class IndoorUtils {
     }
 
     /**
-     * 이 함수는 입력된 궤적에 노이즈를 더해주는 함수이다.
-     *  @param trajectory 입력 궤적
-     *  @param noiseRange 노이즈 범위
+     * This function adds noise to the input trajectory.
+     *
+     *  @param trajectory Input trajectory
+     *  @param noiseRange Range of noise
      * */
     public static LineString generatePathAddedNoise(LineString trajectory, final double noiseRange) {
         LineString resultPath = null;

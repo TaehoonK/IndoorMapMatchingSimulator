@@ -1,8 +1,10 @@
-package edu.pnu.stem.indoor.util;
+package edu.pnu.stem.indoor.util.movingobject.synthetic;
 
 import com.vividsolutions.jts.geom.*;
 import edu.pnu.stem.indoor.feature.CellSpace;
 import edu.pnu.stem.indoor.feature.IndoorFeatures;
+import edu.pnu.stem.indoor.util.IndoorUtils;
+import edu.pnu.stem.indoor.util.parser.ChangeCoord;
 
 import java.util.ArrayList;
 import java.util.Random;

@@ -19,14 +19,14 @@ public class CellSpace {
     private String label;   // Name to represent space
     private Polygon geom;   // Geometry expressing space
     private ArrayList<LineString> doors;    // An array that stores the geometry expressing door. The door is assumed to be represented by a LineString
-    //private ArrayList<LineString> visibilityEdges;  // A collection of edges of the graph that represent visibility from point to point in geometry that represents space
-    //private ArrayList<LineString> door2doorEdges;   // An array that stores the path between doors
-    //private GeometryFactory gf;
+    private ArrayList<LineString> visibilityEdges;  // A collection of edges of the graph that represent visibility from point to point in geometry that represents space
+    private ArrayList<LineString> door2doorEdges;   // An array that stores the path between doors
+    private GeometryFactory gf;
 
     private CellSpace() {
         doors = new ArrayList<>();
-        //visibilityEdges = new ArrayList<>();
-        //door2doorEdges = new ArrayList<>();
+        visibilityEdges = new ArrayList<>();
+        door2doorEdges = new ArrayList<>();
     }
 
     public CellSpace(Polygon geom) {
@@ -75,7 +75,7 @@ public class CellSpace {
     public void addDoors(LineString newDoor) {
         GeometryFactory gf = new GeometryFactory();
         doors.add(newDoor);
-/*
+
         if(visibilityEdges.isEmpty()) {
             setVisibilityGraphEdges();
         }
@@ -110,7 +110,6 @@ public class CellSpace {
                 }
             }
         }
-        */
     }
 
     /**
@@ -118,13 +117,11 @@ public class CellSpace {
      * visibilityEdges is a collection of edges of the graph that represent visibility from point to point in geometry that represents space.
      * */
     private void setVisibilityGraphEdges() {
-        /*
         visibilityEdges.clear();
         Coordinate[] coords = geom.getCoordinates();
         for (Coordinate from : coords) {
             visibilityEdges = addNodetoVGraph(from, visibilityEdges);
         }
-        */
     }
 
     /**
@@ -165,13 +162,10 @@ public class CellSpace {
      * @return Edge list of visible graphs reflecting temporarily added nodes
      * */
     public ArrayList<LineString> addNodetoVGraph(Coordinate startP, Coordinate endP){
-        /*
         ArrayList<LineString> temporalResult = (ArrayList<LineString>) visibilityEdges.clone();
         temporalResult = addNodetoVGraph(startP, temporalResult);
         temporalResult = addNodetoVGraph(endP, temporalResult);
 
         return temporalResult;
-        */
-        return null;
     }
 }

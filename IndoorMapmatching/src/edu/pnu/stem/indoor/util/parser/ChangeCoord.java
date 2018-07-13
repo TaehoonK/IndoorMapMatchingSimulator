@@ -1,4 +1,4 @@
-package edu.pnu.stem.indoor.util;
+package edu.pnu.stem.indoor.util.parser;
 
 import com.vividsolutions.jts.geom.Coordinate;
 

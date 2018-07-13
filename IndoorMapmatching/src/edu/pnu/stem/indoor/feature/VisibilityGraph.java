@@ -12,8 +12,6 @@ import org.geotools.graph.traverse.standard.DijkstraIterator;
 import java.util.ArrayList;
 
 /**
- *
- *
  * Created by STEM_KTH on 2017-05-23.
  * @author Taehoon Kim, Pusan National University, STEM Lab.
  */
