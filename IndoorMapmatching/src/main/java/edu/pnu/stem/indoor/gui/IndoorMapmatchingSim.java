@@ -16,6 +16,7 @@ import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.xml.parsers.ParserConfigurationException;
 import java.awt.*;
+import java.awt.event.ActionListener;
 import java.io.*;
 import java.text.ParseException;
 import java.util.ArrayList;
@@ -39,7 +40,7 @@ public class IndoorMapmatchingSim {
     private JButton buttonCreatePath;
     private JButton buttonSelectCell;
     private JButton buttonEvaluate;
-    private JButton buttonCreateDoor;
+    private JButton buttonSynthetic;
     private JButton buttonCreateHole;
     private JButton buttonGetTR_nextOne;
     private JButton buttonGetOSMData;
@@ -123,6 +124,9 @@ public class IndoorMapmatchingSim {
             else {
                 System.out.println("Cancel");
             }
+        });
+        buttonSynthetic.addActionListener(e -> {
+            ((CanvasPanel)panelCanvas).syntheticTrajectoryTest(textPaneOriginal);
         });
         buttonGetTR_nextOne.addActionListener(e -> {
             if(trajectory != null && trajectoryIF != null && trajectoryGT != null) {

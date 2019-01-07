@@ -13,6 +13,7 @@ import java.awt.*;
 public class ChangeCoord {
     public final static double CANVAS_MULTIPLE = 20.0;
     private final static double EARTH_RADIUS_KM = 6378.1370d;
+    private final static double EARTH_RADIUS_M = 63781370d;
     private static Coordinate min_position = new Coordinate(IndoorMapmatchingSim.CANVAS_LEFT_UPPER_X, IndoorMapmatchingSim.CANVAS_LEFT_UPPER_Y);
     private static Coordinate max_position = new Coordinate(IndoorMapmatchingSim.CANVAS_RIGHT_LOWER_X, IndoorMapmatchingSim.CANVAS_RIGHT_LOWER_Y);
 
@@ -50,7 +51,7 @@ public class ChangeCoord {
         return new Coordinate(changedPositionX.intValue(), changedPositionY.intValue(), targetPosition.z);
     }
 
-    private static double HaversineInM(Coordinate startGPSPosition, Coordinate endGPSPosition) {
+    public static double HaversineInM(Coordinate startGPSPosition, Coordinate endGPSPosition) {
         return (1000d * HaversineInKM(startGPSPosition,endGPSPosition));
     }
 
@@ -73,5 +74,22 @@ public class ChangeCoord {
     // Convert radian value to degree value
     private static double rad2deg(double rad) {
         return rad * 180d / Math.PI;
+    }
+
+    // reference: https://gis.stackexchange.com/questions/2951/algorithm-for-offsetting-a-latitude-longitude-by-some-amount-of-meters
+    public static Coordinate addMeter(Coordinate coordinate, Coordinate meter) {
+        //Position, decimal degrees
+        double lat = coordinate.x;
+        double lon = coordinate.y;
+
+        //offsets in meters
+        double dn = meter.x;
+        double de = meter.y;
+
+        //Coordinate offsets in radians
+        double dLat = dn / EARTH_RADIUS_M;
+        double dLon = de / (EARTH_RADIUS_M * Math.cos(deg2rad(lat)));
+
+        return new Coordinate(lat + rad2deg(dLat), lon + rad2deg(dLon));
     }
 }

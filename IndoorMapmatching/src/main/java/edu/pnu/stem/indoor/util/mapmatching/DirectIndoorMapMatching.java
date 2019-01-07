@@ -36,7 +36,7 @@ public class DirectIndoorMapMatching implements IndoorMapMatching {
     /**
      *
      * */
-    int[] getDIMMResult(LineString trajectory) {
+    public int[] getDIMMResult(LineString trajectory) {
         int[] dimmResult = new int[trajectory.getNumPoints()];
 
         for(int i = 0; i < trajectory.getNumPoints(); i++){

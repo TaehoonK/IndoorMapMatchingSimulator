@@ -34,11 +34,11 @@ public class CellSpace {
     }
 
     public ArrayList<LineString> getDoor2doorEdges() {
-        return null;//door2doorEdges;
+        return door2doorEdges;
     }
 
     public ArrayList<LineString> getVisibilityEdges() {
-        return null;//visibilityEdges;
+        return visibilityEdges;
     }
 
     public ArrayList<LineString> getDoors() {

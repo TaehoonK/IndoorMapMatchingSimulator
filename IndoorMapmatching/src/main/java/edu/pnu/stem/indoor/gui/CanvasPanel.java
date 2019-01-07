@@ -2,6 +2,7 @@ package edu.pnu.stem.indoor.gui;
 
 import edu.pnu.stem.indoor.feature.CellSpace;
 import edu.pnu.stem.indoor.feature.IndoorFeatures;
+import edu.pnu.stem.indoor.util.movingobject.synthetic.SyntheticDataElement;
 import edu.pnu.stem.indoor.util.parser.ChangeCoord;
 import edu.pnu.stem.indoor.util.IndoorUtils;
 import edu.pnu.stem.indoor.util.movingobject.synthetic.SyntheticTrajectoryGenerator;
@@ -446,11 +447,11 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         return realCellCoords;
     }
 
-    public static Geometry getSubLineString(LineString lineString, int size) {
+    static Geometry getSubLineString(LineString lineString, int size) {
         return getSubLineString(lineString, 0, size);
     }
 
-    public static Geometry getSubLineString(LineString lineString, int startIndex, int size) {
+    static Geometry getSubLineString(LineString lineString, int startIndex, int size) {
         GeometryFactory gf = new GeometryFactory();
         if(size > lineString.getNumPoints()) return lineString;
         else if(startIndex > lineString.getNumPoints()) return null;
@@ -469,7 +470,7 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         }
     }
 
-    private void syntheticTrajectoryTest() {
+    void syntheticTrajectoryTest(JTextPane textPaneOriginal) {
         ArrayList<TimeTableElement> timeTableElements = new ArrayList<>();
         Random random = new Random();
         int timeTableElementsNum = 10;
@@ -485,7 +486,13 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         }
 
         SyntheticTrajectoryGenerator generator = new SyntheticTrajectoryGenerator(indoorFeatures);
-        trajectory = generator.generate(timeTableElements);
+        SyntheticDataElement syntheticData = generator.generate(timeTableElements);
+        trajectory = syntheticData.getRaw_trajectory();
+        trajectory_IF = syntheticData.getNoise_trajectory();
+        for(int grounTruth : syntheticData.getGround_truth()) {
+            String originalText = textPaneOriginal.getText();
+            textPaneOriginal.setText(originalText + grounTruth + " (" + indoorFeatures.getCellSpaceLabel(grounTruth) + ")\n");
+        }
         repaint();
     }
 
