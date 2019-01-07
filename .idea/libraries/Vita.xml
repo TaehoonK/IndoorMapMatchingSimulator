@@ -1,0 +1,9 @@
+<component name="libraryTable">
+  <library name="Vita">
+    <CLASSES>
+      <root url="jar://$PROJECT_DIR$/vita-master/classes/artifacts/Vita_jar/Vita.jar!/" />
+    </CLASSES>
+    <JAVADOC />
+    <SOURCES />
+  </library>
+</component>
