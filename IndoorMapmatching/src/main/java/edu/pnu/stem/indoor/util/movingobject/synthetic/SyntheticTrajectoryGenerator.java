@@ -52,7 +52,7 @@ public class SyntheticTrajectoryGenerator {
         ArrayList<Coordinate> coordList = new ArrayList<>();
         LineString tmpTrajectory;
         for (TimeTableElement timeTableElement : timeTable) {
-            // Step1: TimeTableElement 에 지정된 정보에 따른 CellSpace 내부에 임의의 좌표 생성
+            // Step 1: TimeTableElement 에 지정된 정보에 따른 CellSpace 내부에 임의의 좌표 생성
             if(startCoordinate == null) {
                 startCoordinate = getRandomPointInCellSpace(
                         indoorFeatures.getCellSpace(timeTableElement.startCellIndex));
@@ -64,12 +64,12 @@ public class SyntheticTrajectoryGenerator {
             endCoordinate = getRandomPointInCellSpace(
                     indoorFeatures.getCellSpace(timeTableElement.endCellIndex));
 
-            // Step2: 두 좌표간 Indoor route 생성
+            // Step 2: 두 좌표간 Indoor route 생성
             tmpTrajectory = IndoorUtils.getIndoorRoute(gf.createLineString(
                     new Coordinate[]{startCoordinate, endCoordinate}), indoorFeatures.getCellSpaces());
 
-            // Step3: 이동시간에 맞춰 이동 좌표 생성
-            // Step3-1: Make trajectory to line segment list
+            // Step 3: 이동시간에 맞춰 이동 좌표 생성
+            // Step 3-1: Make trajectory to line segment list
             Coordinate[] coordinates = tmpTrajectory.getCoordinates();
             ArrayList<LineSegment> lineSegments = new ArrayList<>();
             for(int i = 0; i < coordinates.length - 1; i++) {
@@ -78,11 +78,11 @@ public class SyntheticTrajectoryGenerator {
                 lineSegments.add(lineSegment);
             }
 
-            // Step3-2: Calculate travel distance per unit time
+            // Step 3-2: Calculate travel distance per unit time
             double travelDistance = tmpTrajectory.getLength() / timeTableElement.travelTime;
             if(travelDistance > MAX_DISTANCE) travelDistance = MAX_DISTANCE;
 
-            // Step3-3: Find a point related with travel distance per unit time using JTS function(pointAlong(fraction))
+            // Step 3-3: Find a point related with travel distance per unit time using JTS function(pointAlong(fraction))
             // TODO: Make ground truth map matching results
             double remainDistance = travelDistance;
             double ips = 0.1;

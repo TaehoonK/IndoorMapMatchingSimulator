@@ -15,6 +15,7 @@ import org.xml.sax.SAXException;
 import javax.swing.*;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.xml.parsers.ParserConfigurationException;
+import java.awt.*;
 import java.io.*;
 import java.text.ParseException;
 import java.util.ArrayList;
@@ -25,15 +26,16 @@ import java.util.regex.Pattern;
  * @author Taehoon Kim, Pusan National University, STEM Lab.
  */
 public class IndoorMapmatchingSim {
-    public final static double CANVAS_RIGHT_LOWER_X = 1500;
-    public final static double CANVAS_RIGHT_LOWER_Y = 1500;
-    public final static double CANVAS_LEFT_UPPER_X = 0;
-    public final static double CANVAS_LEFT_UPPER_Y = 0;
+    public final static int CANVAS_RIGHT_LOWER_X = 1000;
+    public final static int CANVAS_RIGHT_LOWER_Y = 1000;
+    public final static int CANVAS_LEFT_UPPER_X = 0;
+    public final static int CANVAS_LEFT_UPPER_Y = 0;
 
     private GeometryFactory gf;
     private JPanel panelMain;
-    private JButton buttonCreateCell;
     private JPanel panelCanvas;
+    private JScrollPane jScrollPane;
+    private JButton buttonCreateCell;
     private JButton buttonCreatePath;
     private JButton buttonSelectCell;
     private JButton buttonEvaluate;
@@ -41,21 +43,23 @@ public class IndoorMapmatchingSim {
     private JButton buttonCreateHole;
     private JButton buttonGetTR_nextOne;
     private JButton buttonGetOSMData;
-    private JTextPane textPaneOriginal;
-    private JScrollPane jScrollPane;
     private JButton buttonGetTR_prevOne;
     private JButton buttonGetBuildNGO;
+    private JTextPane textPaneOriginal;
 
-    private final String RAW_TR_PATH = "C:\\Users\\timeo\\IdeaProjects\\github\\IndoorMapmatching\\Real_groundTruth";
-    private final String TR_PATH = "C:\\Users\\timeo\\IdeaProjects\\github\\IndoorMapmatching\\Real_positioningTrajectory";
+    private String ROOT_PATH = System.getProperty("user.dir") +"\\IndoorMapmatching\\res";
+    private String GT_PATH = ROOT_PATH + "\\Real_groundTruth";
+    private String TR_PATH = ROOT_PATH+ "\\Real_positioningTrajectory";
 
+    private Dimension area;
     private int trIndexView = 1;
     private LineString trajectory = null;
     private LineString trajectoryIF = null;
     private LineString trajectoryGT = null;
 
     private IndoorMapmatchingSim() {
-        panelMain.setSize(1000,1000);
+        area = new Dimension(CANVAS_RIGHT_LOWER_X - CANVAS_LEFT_UPPER_X,CANVAS_RIGHT_LOWER_Y - CANVAS_LEFT_UPPER_Y);
+        //panelCanvas.setPreferredSize(area);
         gf = new GeometryFactory();
 
         buttonCreateHole.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.CREATE_HOLE);
@@ -63,7 +67,7 @@ public class IndoorMapmatchingSim {
         buttonCreatePath.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.CREATE_TRAJECTORY);
         buttonSelectCell.addActionListener(e -> ((CanvasPanel)panelCanvas).currentEditStatus = EditStatus.SELECT_CELLSPACE);
         buttonGetOSMData.addActionListener(e -> {
-            JFileChooser fileChooser = new JFileChooser("C:\\Users\\timeo\\IdeaProjects\\github\\IndoorMapmatching");
+            JFileChooser fileChooser = new JFileChooser(ROOT_PATH + "\\OSM");
             FileNameExtensionFilter filter = new FileNameExtensionFilter("OSM Data (*.osm)", "osm");
             fileChooser.setFileFilter(filter);
 
@@ -76,6 +80,83 @@ public class IndoorMapmatchingSim {
                 } catch (IOException | ParserConfigurationException | SAXException e1) {
                     e1.printStackTrace();
                 }
+            }
+            else {
+                System.out.println("Cancel");
+            }
+        });
+        buttonGetBuildNGO.addActionListener(e -> {
+            JFileChooser fileChooser = new JFileChooser(TR_PATH);
+            FileNameExtensionFilter filter = new FileNameExtensionFilter("txt (*.txt)", "txt");
+            fileChooser.setFileFilter(filter);
+
+            String fileID = "";
+            int returnVal = fileChooser.showOpenDialog(panelMain);
+            if (returnVal == JFileChooser.APPROVE_OPTION) {
+                File file = fileChooser.getSelectedFile();
+                try {
+                    System.out.println("File Name: " + file.getName());
+                    String[] fileName = file.getName().split("_");
+                    fileID = fileName[fileName.length - 1];
+
+                    LineString trajectory = DataUtils.getBuildNGoData(file);
+                    if(trajectory.isEmpty()) return;
+                    ((CanvasPanel)panelCanvas).setTrajectory(trajectory);
+
+                    LineString lineWithMaxIndoorDistance = IndoorUtils.applyIndoorDistanceFilter(trajectory, ChangeCoord.CANVAS_MULTIPLE * 3, ((CanvasPanel)panelCanvas).getIndoorFeatures().getCellSpaces());
+                    ((CanvasPanel)panelCanvas).setTrajectory_IF(lineWithMaxIndoorDistance);
+                } catch (IOException | ParseException e1) {
+                    e1.printStackTrace();
+                }
+                String[] gt = null;
+                String groundTruthFileName = "gt_Trajectory_";
+                File groundTruth = new File(GT_PATH +"\\"+ groundTruthFileName + fileID);
+                try {
+                    gt = DataUtils.getBuildNGoGroundTruth(groundTruth);
+                } catch (IOException | ParseException e1) {
+                    e1.printStackTrace();
+                }
+
+                ((CanvasPanel)panelCanvas).doIndoorMapMatching(textPaneOriginal);
+                ((CanvasPanel)panelCanvas).getGroundTruthResult(textPaneOriginal, gt);
+            }
+            else {
+                System.out.println("Cancel");
+            }
+        });
+        buttonGetTR_nextOne.addActionListener(e -> {
+            if(trajectory != null && trajectoryIF != null && trajectoryGT != null) {
+                if(trajectory.getNumPoints() > trIndexView && trIndexView > 0) {
+                    trIndexView++;
+
+                    ((CanvasPanel)panelCanvas).setTrajectory((LineString) CanvasPanel.getSubLineString(trajectory, trIndexView));
+                    ((CanvasPanel)panelCanvas).setTrajectory_IF((LineString) CanvasPanel.getSubLineString(trajectoryIF, trIndexView));
+                }
+                else {
+                    trajectory = trajectoryIF = trajectoryGT = null;
+                    trIndexView = 1;
+                }
+            }
+            else {
+                trajectory = ((CanvasPanel)panelCanvas).getTrajectory();
+                trajectoryIF = ((CanvasPanel)panelCanvas).getTrajectory_IF();
+            }
+        });
+        buttonGetTR_prevOne.addActionListener(e -> {
+            if(trajectory != null && trajectoryIF != null && trajectoryGT != null) {
+                if(trajectory.getNumPoints() > trIndexView && trIndexView > 2) {
+                    trIndexView--;
+
+                    ((CanvasPanel)panelCanvas).setTrajectory((LineString) CanvasPanel.getSubLineString(trajectory, trIndexView));
+                    ((CanvasPanel)panelCanvas).setTrajectory_IF((LineString) CanvasPanel.getSubLineString(trajectoryIF, trIndexView));
+                }
+                else {
+                    trIndexView = 3;
+                }
+            }
+            else {
+                trajectory = ((CanvasPanel)panelCanvas).getTrajectory();
+                trajectoryIF = ((CanvasPanel)panelCanvas).getTrajectory_IF();
             }
         });
         buttonEvaluate.addActionListener(e -> {
@@ -114,7 +195,7 @@ public class IndoorMapmatchingSim {
 
                 String groundTruthFileName = "gt_Trajectory_";
                 String[] stringGT = null;
-                File groundTruth = new File(RAW_TR_PATH +"\\"+ groundTruthFileName + fileID + ".txt");
+                File groundTruth = new File(GT_PATH +"\\"+ groundTruthFileName + fileID + ".txt");
                 try {
                     stringGT = DataUtils.getBuildNGoGroundTruth(groundTruth);
                 } catch (IOException | ParseException e1) {
@@ -185,83 +266,12 @@ public class IndoorMapmatchingSim {
             long endTime = System.currentTimeMillis();
             System.out.println("Running Time :" + (endTime - startTime)/1000.0 + "sec");
         });
-        buttonGetBuildNGO.addActionListener(e -> {
-            JFileChooser fileChooser = new JFileChooser(TR_PATH);
-            FileNameExtensionFilter filter = new FileNameExtensionFilter("txt (*.txt)", "txt");
-            fileChooser.setFileFilter(filter);
-
-            String fileID = "";
-            int returnVal = fileChooser.showOpenDialog(panelMain);
-            if (returnVal == JFileChooser.APPROVE_OPTION) {
-                File file = fileChooser.getSelectedFile();
-                try {
-                    System.out.println("File Name: " + file.getName());
-                    String[] fileName = file.getName().split("_");
-                    fileID = fileName[fileName.length - 1];
-
-                    LineString trajectory = DataUtils.getBuildNGoData(file);
-                    if(trajectory.isEmpty()) return;
-                    ((CanvasPanel)panelCanvas).setTrajectory(trajectory);
-
-                    LineString lineWithMaxIndoorDistance = IndoorUtils.applyIndoorDistanceFilter(trajectory, ChangeCoord.CANVAS_MULTIPLE * 3, ((CanvasPanel)panelCanvas).getIndoorFeatures().getCellSpaces());
-                    ((CanvasPanel)panelCanvas).setTrajectory_IF(lineWithMaxIndoorDistance);
-                } catch (IOException | ParseException e1) {
-                    e1.printStackTrace();
-                }
-            }
-
-            String[] gt = null;
-            String groundTruthFileName = "gt_Trajectory_";
-            File groundTruth = new File(RAW_TR_PATH +"\\"+ groundTruthFileName + fileID);
-            try {
-                gt = DataUtils.getBuildNGoGroundTruth(groundTruth);
-            } catch (IOException | ParseException e1) {
-                e1.printStackTrace();
-            }
-
-            ((CanvasPanel)panelCanvas).doIndoorMapMatching(textPaneOriginal);
-            ((CanvasPanel)panelCanvas).getGroundTruthResult(textPaneOriginal, gt);
-        });
-        buttonGetTR_nextOne.addActionListener(e -> {
-            if(trajectory != null && trajectoryIF != null && trajectoryGT != null) {
-                if(trajectory.getNumPoints() > trIndexView && trIndexView > 0) {
-                    trIndexView++;
-
-                    ((CanvasPanel)panelCanvas).setTrajectory((LineString) CanvasPanel.getSubLineString(trajectory, trIndexView));
-                    ((CanvasPanel)panelCanvas).setTrajectory_IF((LineString) CanvasPanel.getSubLineString(trajectoryIF, trIndexView));
-                }
-                else {
-                    trajectory = trajectoryIF = trajectoryGT = null;
-                    trIndexView = 1;
-                }
-            }
-            else {
-                trajectory = ((CanvasPanel)panelCanvas).getTrajectory();
-                trajectoryIF = ((CanvasPanel)panelCanvas).getTrajectory_IF();
-            }
-        });
-        buttonGetTR_prevOne.addActionListener(e -> {
-            if(trajectory != null && trajectoryIF != null && trajectoryGT != null) {
-                if(trajectory.getNumPoints() > trIndexView && trIndexView > 2) {
-                    trIndexView--;
-
-                    ((CanvasPanel)panelCanvas).setTrajectory((LineString) CanvasPanel.getSubLineString(trajectory, trIndexView));
-                    ((CanvasPanel)panelCanvas).setTrajectory_IF((LineString) CanvasPanel.getSubLineString(trajectoryIF, trIndexView));
-                }
-                else {
-                    trIndexView = 3;
-                }
-            }
-            else {
-                trajectory = ((CanvasPanel)panelCanvas).getTrajectory();
-                trajectoryIF = ((CanvasPanel)panelCanvas).getTrajectory_IF();
-            }
-        });
     }
 
     public static void main(String[] args) {
+        IndoorMapmatchingSim indoorMapmatchingSim = new IndoorMapmatchingSim();
         JFrame jFrame = new JFrame("Symbolic Indoor Map Matching Simulator");
-        jFrame.setContentPane(new IndoorMapmatchingSim().panelMain);
+        jFrame.setContentPane(indoorMapmatchingSim.panelMain);
         jFrame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         jFrame.pack();
         jFrame.setVisible(true);
@@ -269,7 +279,15 @@ public class IndoorMapmatchingSim {
 
     private void createUIComponents() {
         // TODO: Place custom component creation code here
-        panelCanvas = new CanvasPanel();
+        panelCanvas = new CanvasPanel(this);
         jScrollPane = new JScrollPane(panelCanvas);
+        //panelMain.add(jScrollPane);
+    }
+
+    public void changeCanvasArea(Dimension area) {
+        if(!panelCanvas.getPreferredSize().equals(area)){
+            panelCanvas.setPreferredSize(area);
+            panelCanvas.revalidate();
+        }
     }
 }

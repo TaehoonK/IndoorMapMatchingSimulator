@@ -1,7 +1,10 @@
 package edu.pnu.stem.indoor.util.parser;
 
 
+import edu.pnu.stem.indoor.gui.IndoorMapmatchingSim;
 import org.locationtech.jts.geom.Coordinate;
+
+import java.awt.*;
 
 /**
  * Created by STEM_KTH on 2017-06-02.
@@ -10,13 +13,26 @@ import org.locationtech.jts.geom.Coordinate;
 public class ChangeCoord {
     public final static double CANVAS_MULTIPLE = 20.0;
     private final static double EARTH_RADIUS_KM = 6378.1370d;
-    private static Coordinate min_position = new Coordinate(0,0);
-    private static Coordinate max_position = new Coordinate(1000,1000);
+    private static Coordinate min_position = new Coordinate(IndoorMapmatchingSim.CANVAS_LEFT_UPPER_X, IndoorMapmatchingSim.CANVAS_LEFT_UPPER_Y);
+    private static Coordinate max_position = new Coordinate(IndoorMapmatchingSim.CANVAS_RIGHT_LOWER_X, IndoorMapmatchingSim.CANVAS_RIGHT_LOWER_Y);
 
     public static void setInitialInfo(Coordinate minPosition, Coordinate maxPosition)
     {
         min_position = minPosition;
         max_position = maxPosition;
+    }
+
+    public static Dimension getArea() {
+        Dimension area;
+        if(min_position.equals2D(new Coordinate(IndoorMapmatchingSim.CANVAS_LEFT_UPPER_X, IndoorMapmatchingSim.CANVAS_LEFT_UPPER_Y))
+                && max_position.equals2D(new Coordinate(IndoorMapmatchingSim.CANVAS_RIGHT_LOWER_X, IndoorMapmatchingSim.CANVAS_RIGHT_LOWER_Y))) {
+            area = new Dimension(IndoorMapmatchingSim.CANVAS_RIGHT_LOWER_X, IndoorMapmatchingSim.CANVAS_RIGHT_LOWER_Y);
+        }
+        else {
+            area = new Dimension((int) (HaversineInM(new Coordinate(max_position.x, 0), new Coordinate(min_position.x, 0)) * CANVAS_MULTIPLE + 100),
+                    (int) (HaversineInM(new Coordinate(0, max_position.y), new Coordinate(0, min_position.y)) * CANVAS_MULTIPLE + 10));
+        }
+        return area;
     }
 
     public static Coordinate changeCoordWithRatio(Coordinate targetPosition) {

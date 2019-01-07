@@ -40,7 +40,7 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
     private static final double SNAP_THRESHOLD = 10; // Threshold value for snapping function
     private static final double POINT_RADIUS = 5;    // Radius of point for draw point (circle shape)
     private static final double SCREEN_BUFFER = 50;  // Screen buffer value
-    private static final int ARR_SIZE = 8;           // Arrow size of directed line
+    private static final int    ARR_SIZE = 8;        // Arrow size of directed line
     private static final double MAX_DISTANCE = ChangeCoord.CANVAS_MULTIPLE * 3;  // The distance that humans can move per unit time
     private static final double MIN_DISTANCE = ChangeCoord.CANVAS_MULTIPLE * 0.5;
 
@@ -59,10 +59,12 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
     private ArrayList<LineString> relatedD2DEdge = null;
     private ArrayList<Polygon> circleBufferArray = null;
 
+    private IndoorMapmatchingSim parent;
+
     int mousePositionX;
     int mousePositionY;
 
-    CanvasPanel() {
+    CanvasPanel(IndoorMapmatchingSim parent) {
         gf = new GeometryFactory();
         indoorFeatures = new IndoorFeatures(gf);
         relatedVisibilityEdge = new ArrayList<>();
@@ -72,6 +74,7 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
         this.addMouseMotionListener(this);
         this.addMouseWheelListener(this);
         this.addKeyListener(this);
+        this.parent = parent;
     }
 
     void setIndoorFeatures(IndoorFeatures indoorFeatures) {
@@ -178,6 +181,7 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
                     }
                 }
             }
+            parent.changeCanvasArea(ChangeCoord.getArea());
         }
         if(trajectory != null) {
             drawArrowLines(g2, trajectory.getCoordinates(), trajectory.getNumPoints(), Color.GREEN);
@@ -423,7 +427,7 @@ public class CanvasPanel extends JPanel implements MouseListener, MouseMotionLis
 
         mousePositionX = e.getX();
         mousePositionY = e.getY();
-        repaint();
+        //repaint();
 
     }
 
